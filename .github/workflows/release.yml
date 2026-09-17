@@ -1,8 +1,14 @@
 name: Release
 
-# A tag is the only automatic trigger. Pushing a branch runs nothing: the
-# artifact a consumer takes is the one attached to a tag, built from that tag's
-# Cargo.lock, so there is no question of which build a given version is.
+# A tag is the only automatic trigger. Pushing a branch runs CI, not this: the
+# artifact a consumer pins is the one attached to a tag, built from that tag's
+# Cargo.lock with the toolchain rust-toolchain.toml names, so there is no
+# question of which build a given version is.
+#
+# **Artifacts are written once.** A tag that already has them fails rather than
+# replacing them. A consumer that recorded a digest and a tag has recorded
+# something that cannot quietly become different bytes later; if a release is
+# wrong, the answer is another tag.
 on:
   push:
     tags:
@@ -30,15 +36,14 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
 
-      - name: Install the toolchain
+      # rust-toolchain.toml decides this, not the date the workflow runs. A
+      # rebuild of a tag has to produce the bytes that tag shipped.
+      - name: Install the pinned toolchain
         run: |
-          rustup toolchain install stable --profile minimal
-          rustup target add wasm32-unknown-unknown
+          rustup show
           rustc --version
+          rustup target list --installed
 
-      # The CLI and the crate's dependency must be the same version or the
-      # generated glue will not match the module. Read the pin rather than
-      # repeat it, so there is one place to change it.
       - name: Install wasm-bindgen-cli, at the version the crate pins
         run: |
           want=$(grep -o '"=0\.2\.[0-9]*"' crates/gguf-wasm/Cargo.toml | tr -d '"=')
@@ -47,27 +52,46 @@ jobs:
 
       - name: Test
         run: |
-          cargo test --release --locked
-          cargo test --release --locked -p gguf --features std
+          cargo test --release --locked --workspace
+          cargo test --release --locked -p f2i-gguf --features std
 
       - name: Check it still builds without std
         run: cargo build --release --locked --target wasm32-unknown-unknown
 
+      - name: Package
+        run: cargo package --workspace --locked --exclude gguf-examples
+
       - name: Build the module
         run: sh scripts/build-wasm.sh
 
-      - name: Package
-        id: package
+      - name: Smoke-test it
+        run: node scripts/smoke.mjs
+
+      - name: Bundle
         run: |
           version="${{ inputs.tag || github.ref_name }}"
           mkdir -p dist
-          cp README.md LICENSE-MIT LICENSE-APACHE pkg/
-          cp README.md LICENSE-MIT LICENSE-APACHE pkg-node/
+          for target in pkg pkg-node; do
+            cp README.md LICENSE-MIT LICENSE-APACHE "$target/"
+          done
           cp js/index.mjs pkg/index.mjs
           tar -czf "dist/gguf-wasm-web-$version.tar.gz" -C pkg .
           tar -czf "dist/gguf-wasm-node-$version.tar.gz" -C pkg-node .
           (cd dist && sha256sum *.tar.gz > SHA256SUMS)
           cat dist/SHA256SUMS
+
+      # Written once. A consumer pins a tag and a digest together, so replacing
+      # what a tag points at would make that pin a lie.
+      - name: Refuse to replace what a tag already published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${{ inputs.tag || github.ref_name }}"
+          if gh release view "$version" --json assets -q '.assets[].name' 2>/dev/null | grep -q .; then
+            echo "$version already has assets. A release is written once; cut another tag." >&2
+            gh release view "$version" --json assets -q '.assets[].name' >&2
+            exit 1
+          fi
 
       - name: Attach to the release
         env:
@@ -76,4 +100,4 @@ jobs:
           version="${{ inputs.tag || github.ref_name }}"
           gh release view "$version" >/dev/null 2>&1 \
             || gh release create "$version" --title "$version" --generate-notes
-          gh release upload "$version" dist/*.tar.gz dist/SHA256SUMS --clobber
+          gh release upload "$version" dist/*.tar.gz dist/SHA256SUMS

@@ -1,0 +1,12 @@
+# The toolchain a release is built with.
+#
+# "stable" is whatever stable means on the day a workflow runs, and a released
+# artifact should not depend on the day. Pinning it here means a rebuild of a
+# tag produces the same bytes as the build that tag shipped -- which is the
+# whole point of attaching the artifact to the tag rather than to a branch.
+#
+# Moving this is a deliberate act with a version bump attached.
+[toolchain]
+channel = "1.92.0"
+components = ["rustfmt", "clippy"]
+targets = ["wasm32-unknown-unknown"]

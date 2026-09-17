@@ -1,0 +1,94 @@
+name: CI
+
+# Every push and every pull request. This is a library other projects pin, so
+# the useful question is not "does it build here" but "does it still build,
+# still pass, still package, and still produce a module that loads".
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  rust:
+    name: Rust
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      # rust-toolchain.toml pins the channel, so this installs exactly what a
+      # release is built with rather than whatever stable means today.
+      - name: Install the pinned toolchain
+        run: rustup show && rustc --version
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace --locked
+
+      # The feature that opens a file, which the default build does not have.
+      - name: Test with std
+        run: cargo test --locked -p f2i-gguf --features std
+
+      # And the configuration a browser actually uses: no std anywhere.
+      - name: Build for wasm32, without std
+        run: cargo build --release --locked --target wasm32-unknown-unknown
+
+      # Catches what only shows at publish time: a missing README, an absent
+      # file referenced by a manifest, a path dependency with no version.
+      - name: Package
+        run: cargo package --workspace --locked --exclude gguf-examples
+
+  wasm:
+    name: WebAssembly
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install wasm-bindgen-cli, at the version the crate pins
+        run: |
+          want=$(grep -o '"=0\.2\.[0-9]*"' crates/gguf-wasm/Cargo.toml | tr -d '"=')
+          echo "pinned: $want"
+          cargo install wasm-bindgen-cli --version "$want" --locked
+
+      - name: Build the module
+        run: sh scripts/build-wasm.sh
+
+      # A module that builds and does not load is not a module. This parses a
+      # GGUF header the test writes itself, so no checkpoint is needed.
+      - name: Smoke-test it in Node
+        run: node scripts/smoke.mjs
+
+  js:
+    name: JavaScript
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test the source adapters
+        run: node --test js/index.test.mjs
