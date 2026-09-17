@@ -52,10 +52,18 @@ impl Pattern {
     }
 }
 
-fn letter(c: char) -> bool { c.is_alphabetic() }
-fn digit(c: char) -> bool { c.is_numeric() }
-fn space(c: char) -> bool { c.is_whitespace() }
-fn newline(c: char) -> bool { c == '\r' || c == '\n' }
+fn letter(c: char) -> bool {
+    c.is_alphabetic()
+}
+fn digit(c: char) -> bool {
+    c.is_numeric()
+}
+fn space(c: char) -> bool {
+    c.is_whitespace()
+}
+fn newline(c: char) -> bool {
+    c == '\r' || c == '\n'
+}
 
 /// Split `text` into pre-tokens, in order. Their concatenation is `text`.
 pub fn split(text: &str, pattern: Pattern) -> Vec<&str> {
@@ -68,7 +76,9 @@ pub fn split(text: &str, pattern: Pattern) -> Vec<&str> {
         // returns at least one, and this is the belt for that brace.
         let taken = if taken == 0 { 1 } else { taken };
         let start = chars[at].0;
-        let end = chars.get(at + taken).map_or(text.len(), |&(offset, _)| offset);
+        let end = chars
+            .get(at + taken)
+            .map_or(text.len(), |&(offset, _)| offset);
         pieces.push(&text[start..end]);
         at += taken;
     }
@@ -83,12 +93,22 @@ fn piece(chars: &[(usize, char)], at: usize, pattern: Pattern) -> usize {
     // 1. Contractions. Qwen2 and Llama3 match them case-insensitively; GPT-2
     //    matches only the lowercase forms it was trained on.
     if c(at) == '\'' && at + 1 < n {
-        let fold = |ch: char| if pattern == Pattern::Gpt2 { ch } else { ch.to_ascii_lowercase() };
+        let fold = |ch: char| {
+            if pattern == Pattern::Gpt2 {
+                ch
+            } else {
+                ch.to_ascii_lowercase()
+            }
+        };
         let one = fold(c(at + 1));
-        if matches!(one, 's' | 't' | 'm' | 'd') { return 2; }
+        if matches!(one, 's' | 't' | 'm' | 'd') {
+            return 2;
+        }
         if at + 2 < n {
             let two = (one, fold(c(at + 2)));
-            if matches!(two, ('r', 'e') | ('v', 'e') | ('l', 'l')) { return 3; }
+            if matches!(two, ('r', 'e') | ('v', 'e') | ('l', 'l')) {
+                return 3;
+            }
         }
     }
 
@@ -101,9 +121,13 @@ fn piece(chars: &[(usize, char)], at: usize, pattern: Pattern) -> usize {
             Pattern::Gpt2 => c(i) == ' ',
             _ => !letter(c(i)) && !digit(c(i)) && !newline(c(i)),
         };
-        if absorbs { i += 1; }
+        if absorbs {
+            i += 1;
+        }
         if i < n && letter(c(i)) {
-            while i < n && letter(c(i)) { i += 1; }
+            while i < n && letter(c(i)) {
+                i += 1;
+            }
             return i - at;
         }
     }
@@ -112,11 +136,15 @@ fn piece(chars: &[(usize, char)], at: usize, pattern: Pattern) -> usize {
     //    them; Qwen2 takes one digit at a time and no space.
     {
         let mut i = at;
-        if pattern == Pattern::Gpt2 && c(i) == ' ' && i + 1 < n && digit(c(i + 1)) { i += 1; }
+        if pattern == Pattern::Gpt2 && c(i) == ' ' && i + 1 < n && digit(c(i + 1)) {
+            i += 1;
+        }
         if i < n && digit(c(i)) {
             let limit = pattern.max_digits();
             let start = i;
-            while i < n && digit(c(i)) && i - start < limit { i += 1; }
+            while i < n && digit(c(i)) && i - start < limit {
+                i += 1;
+            }
             return i - at;
         }
     }
@@ -124,12 +152,18 @@ fn piece(chars: &[(usize, char)], at: usize, pattern: Pattern) -> usize {
     // 4. Punctuation, optionally with a leading space and trailing line breaks.
     {
         let mut i = at;
-        if c(i) == ' ' { i += 1; }
+        if c(i) == ' ' {
+            i += 1;
+        }
         let start = i;
-        while i < n && !space(c(i)) && !letter(c(i)) && !digit(c(i)) { i += 1; }
+        while i < n && !space(c(i)) && !letter(c(i)) && !digit(c(i)) {
+            i += 1;
+        }
         if i > start {
             if pattern != Pattern::Gpt2 {
-                while i < n && newline(c(i)) { i += 1; }
+                while i < n && newline(c(i)) {
+                    i += 1;
+                }
             }
             return i - at;
         }
@@ -139,10 +173,16 @@ fn piece(chars: &[(usize, char)], at: usize, pattern: Pattern) -> usize {
     //    whitespace run whose last character is a break.
     if pattern != Pattern::Gpt2 {
         let mut i = at;
-        while i < n && space(c(i)) { i += 1; }
+        while i < n && space(c(i)) {
+            i += 1;
+        }
         let mut end = i;
-        while end > at && !newline(c(end - 1)) { end -= 1; }
-        if end > at { return end - at; }
+        while end > at && !newline(c(end - 1)) {
+            end -= 1;
+        }
+        if end > at {
+            return end - at;
+        }
     }
 
     // 6. `\s+(?!\S)`: whitespace not followed by anything else. Upstream gets
@@ -151,18 +191,28 @@ fn piece(chars: &[(usize, char)], at: usize, pattern: Pattern) -> usize {
     //    word that follows, which rule 2 will take.
     {
         let mut i = at;
-        while i < n && space(c(i)) { i += 1; }
+        while i < n && space(c(i)) {
+            i += 1;
+        }
         if i > at {
-            if i == n { return i - at; }
-            if i - at > 1 { return i - at - 1; }
+            if i == n {
+                return i - at;
+            }
+            if i - at > 1 {
+                return i - at - 1;
+            }
         }
     }
 
     // 7. Whatever whitespace is left.
     {
         let mut i = at;
-        while i < n && space(c(i)) { i += 1; }
-        if i > at { return i - at; }
+        while i < n && space(c(i)) {
+            i += 1;
+        }
+        if i > at {
+            return i - at;
+        }
     }
 
     1
@@ -173,13 +223,25 @@ mod tests {
     use super::*;
     use alloc::string::String;
 
-    fn pieces(text: &str, pattern: Pattern) -> Vec<&str> { split(text, pattern) }
+    fn pieces(text: &str, pattern: Pattern) -> Vec<&str> {
+        split(text, pattern)
+    }
 
     #[test]
     fn every_split_is_lossless() {
-        let samples = ["The capital of France is Paris.", "Mr.Smith said hi.",
-                       "12345 and 0", "  leading", "trailing   ", "a\n\nb", "\r\n\r\n",
-                       "emoji 👋 and accents café", "", " ", "'s 'RE won't"];
+        let samples = [
+            "The capital of France is Paris.",
+            "Mr.Smith said hi.",
+            "12345 and 0",
+            "  leading",
+            "trailing   ",
+            "a\n\nb",
+            "\r\n\r\n",
+            "emoji 👋 and accents café",
+            "",
+            " ",
+            "'s 'RE won't",
+        ];
         for pattern in [Pattern::Gpt2, Pattern::Qwen2, Pattern::Llama3] {
             for text in samples {
                 let joined: String = pieces(text, pattern).concat();
@@ -197,8 +259,14 @@ mod tests {
 
     #[test]
     fn a_word_keeps_its_leading_space() {
-        assert_eq!(pieces("The capital of", Pattern::Qwen2), ["The", " capital", " of"]);
-        assert_eq!(pieces("The capital of", Pattern::Gpt2), ["The", " capital", " of"]);
+        assert_eq!(
+            pieces("The capital of", Pattern::Qwen2),
+            ["The", " capital", " of"]
+        );
+        assert_eq!(
+            pieces("The capital of", Pattern::Gpt2),
+            ["The", " capital", " of"]
+        );
     }
 
     #[test]

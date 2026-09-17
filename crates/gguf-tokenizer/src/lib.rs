@@ -78,7 +78,9 @@ impl Alphabet {
     /// Unknown characters are dropped rather than panicking: a corrupt id
     /// should produce short output, not take the page down.
     fn bytes(&self, text: &str) -> Vec<u8> {
-        text.chars().filter_map(|c| self.to_byte.get(&c).copied()).collect()
+        text.chars()
+            .filter_map(|c| self.to_byte.get(&c).copied())
+            .collect()
     }
 }
 
@@ -96,7 +98,10 @@ impl core::fmt::Display for TokenizerError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::OutOfVocabulary => write!(f, "BPE produced a piece outside the vocabulary"),
-            Self::UnknownPattern => write!(f, "unrecognised tokenizer.ggml.pre; refusing to guess a pre-tokenizer"),
+            Self::UnknownPattern => write!(
+                f,
+                "unrecognised tokenizer.ggml.pre; refusing to guess a pre-tokenizer"
+            ),
         }
     }
 }
@@ -118,8 +123,13 @@ impl Tokenizer {
     /// text is matched literally before BPE ever sees it -- chat markers like
     /// `<|im_start|>`, which byte-level BPE would otherwise shred into six
     /// tokens the model has never seen together.
-    pub fn new(tokens: Vec<String>, merges: Vec<String>, pattern: Pattern,
-               specials: Vec<u32>, unk: Option<u32>) -> Self {
+    pub fn new(
+        tokens: Vec<String>,
+        merges: Vec<String>,
+        pattern: Pattern,
+        specials: Vec<u32>,
+        unk: Option<u32>,
+    ) -> Self {
         let mut ids = BTreeMap::new();
         for (id, token) in tokens.iter().enumerate() {
             // First wins: a duplicate later in the list is unreachable anyway.
@@ -129,19 +139,36 @@ impl Tokenizer {
         for (rank, merge) in merges.into_iter().enumerate() {
             ranks.entry(merge).or_insert(rank as u32);
         }
-        let mut literal: Vec<(String, u32)> = specials.into_iter()
+        let mut literal: Vec<(String, u32)> = specials
+            .into_iter()
             .filter_map(|id| tokens.get(id as usize).map(|t| (t.clone(), id)))
             .filter(|(t, _)| !t.is_empty())
             .collect();
         // Longest first, so `<|im_start|>` wins over any prefix of itself.
         literal.sort_by(|a, b| b.0.len().cmp(&a.0.len()).then(a.1.cmp(&b.1)));
-        Self { tokens, ids, merges: ranks, specials: literal, alphabet: Alphabet::new(), pattern, unk }
+        Self {
+            tokens,
+            ids,
+            merges: ranks,
+            specials: literal,
+            alphabet: Alphabet::new(),
+            pattern,
+            unk,
+        }
     }
 
-    pub fn vocab_size(&self) -> usize { self.tokens.len() }
-    pub fn token(&self, id: u32) -> Option<&str> { self.tokens.get(id as usize).map(|s| s.as_str()) }
-    pub fn id_of(&self, piece: &str) -> Option<u32> { self.ids.get(piece).copied() }
-    pub fn pattern(&self) -> Pattern { self.pattern }
+    pub fn vocab_size(&self) -> usize {
+        self.tokens.len()
+    }
+    pub fn token(&self, id: u32) -> Option<&str> {
+        self.tokens.get(id as usize).map(|s| s.as_str())
+    }
+    pub fn id_of(&self, piece: &str) -> Option<u32> {
+        self.ids.get(piece).copied()
+    }
+    pub fn pattern(&self) -> Pattern {
+        self.pattern
+    }
 
     /// Text to token ids.
     pub fn encode(&self, text: &str) -> Result<Vec<u32>, TokenizerError> {
@@ -156,18 +183,27 @@ impl Tokenizer {
                     let start = cursor + offset;
                     let better = match found {
                         None => true,
-                        Some((best, best_end, _)) => start < best || (start == best && start + literal.len() > best_end),
+                        Some((best, best_end, _)) => {
+                            start < best || (start == best && start + literal.len() > best_end)
+                        }
                     };
-                    if better { found = Some((start, start + literal.len(), *id)); }
+                    if better {
+                        found = Some((start, start + literal.len(), *id));
+                    }
                 }
             }
             match found {
                 Some((start, end, id)) => {
-                    if start > cursor { self.encode_run(&text[cursor..start], &mut out)?; }
+                    if start > cursor {
+                        self.encode_run(&text[cursor..start], &mut out)?;
+                    }
                     out.push(id);
                     cursor = end;
                 }
-                None => { self.encode_run(&text[cursor..], &mut out)?; break; }
+                None => {
+                    self.encode_run(&text[cursor..], &mut out)?;
+                    break;
+                }
             }
         }
         Ok(out)
@@ -190,7 +226,9 @@ impl Tokenizer {
                     key.push(' ');
                     key.push_str(&parts[i + 1]);
                     if let Some(&rank) = self.merges.get(&key) {
-                        if best.is_none_or(|(_, b)| rank < b) { best = Some((i, rank)); }
+                        if best.is_none_or(|(_, b)| rank < b) {
+                            best = Some((i, rank));
+                        }
                     }
                 }
                 let Some((i, _)) = best else { break };
@@ -212,7 +250,9 @@ impl Tokenizer {
     pub fn decode(&self, ids: &[u32]) -> String {
         let mut visible = String::new();
         for &id in ids {
-            if let Some(token) = self.token(id) { visible.push_str(token); }
+            if let Some(token) = self.token(id) {
+                visible.push_str(token);
+            }
         }
         String::from_utf8_lossy(&self.alphabet.bytes(&visible)).into_owned()
     }
@@ -226,10 +266,12 @@ mod tests {
     /// merge-priority order.
     fn toy() -> Tokenizer {
         let mut tokens: Vec<String> = Vec::new();
-        for b in 0u8..=255 { tokens.push(Alphabet::new().to_char[b as usize].to_string()); }
-        tokens.push("Ġw".to_string());      // 256
-        tokens.push("or".to_string());      // 257
-        tokens.push("Ġworld".to_string());  // 258
+        for b in 0u8..=255 {
+            tokens.push(Alphabet::new().to_char[b as usize].to_string());
+        }
+        tokens.push("Ġw".to_string()); // 256
+        tokens.push("or".to_string()); // 257
+        tokens.push("Ġworld".to_string()); // 258
         tokens.push("<|end|>".to_string()); // 259
         let merges = alloc::vec!["Ġ w".to_string(), "o r".to_string()];
         Tokenizer::new(tokens, merges, Pattern::Qwen2, alloc::vec![259], None)
@@ -249,14 +291,20 @@ mod tests {
         // " wor" offers both merges; rank 0 ("Ġ w") must go first.
         let ids = tok.encode(" wor").unwrap();
         assert_eq!(tok.decode(&ids), " wor");
-        assert!(ids.contains(&256), "the rank-0 merge was not taken: {ids:?}");
+        assert!(
+            ids.contains(&256),
+            "the rank-0 merge was not taken: {ids:?}"
+        );
     }
 
     #[test]
     fn a_special_token_is_never_split() {
         let tok = toy();
         let ids = tok.encode("or<|end|>or").unwrap();
-        assert!(ids.contains(&259), "the special token was shredded: {ids:?}");
+        assert!(
+            ids.contains(&259),
+            "the special token was shredded: {ids:?}"
+        );
         assert_eq!(ids.iter().filter(|&&id| id == 259).count(), 1);
         assert_eq!(tok.decode(&ids), "or<|end|>or");
     }
@@ -264,7 +312,13 @@ mod tests {
     #[test]
     fn decode_round_trips_arbitrary_text() {
         let tok = toy();
-        for text in ["hello world", "Mr.Smith said 12345", "caf\u{e9} \u{1f44b}", " leading", "trailing  "] {
+        for text in [
+            "hello world",
+            "Mr.Smith said 12345",
+            "caf\u{e9} \u{1f44b}",
+            " leading",
+            "trailing  ",
+        ] {
             let ids = tok.encode(text).unwrap();
             assert_eq!(tok.decode(&ids), text, "round trip failed for {text:?}");
         }
@@ -273,7 +327,13 @@ mod tests {
     #[test]
     fn an_unknown_piece_without_an_unk_token_is_refused() {
         // A vocabulary with no byte alphabet at all cannot spell anything.
-        let tok = Tokenizer::new(alloc::vec!["only".to_string()], Vec::new(), Pattern::Qwen2, Vec::new(), None);
+        let tok = Tokenizer::new(
+            alloc::vec!["only".to_string()],
+            Vec::new(),
+            Pattern::Qwen2,
+            Vec::new(),
+            None,
+        );
         assert_eq!(tok.encode("x"), Err(TokenizerError::OutOfVocabulary));
     }
 }

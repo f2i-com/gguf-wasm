@@ -25,11 +25,14 @@ fn unpack_scale_min(j: usize, scales: &[u8]) -> (u8, u8) {
         (scales[j] & 0x3F, scales[j + 4] & 0x3F)
     } else {
         let d = (scales[j + 4] & 0x0F) | ((scales[j - 4] >> 6) << 4);
-        let m = (scales[j + 4] >> 4)   | ((scales[j]     >> 6) << 4);
+        let m = (scales[j + 4] >> 4) | ((scales[j] >> 6) << 4);
         (d, m)
     }
 }
 
+// Laid out to match ggml's own source line for line, which is how this is
+// verified: the alignment is the correspondence, not decoration.
+#[rustfmt::skip]
 #[inline]
 pub fn dequantize_block(src: &[u8], dst: &mut [f32]) {
     debug_assert_eq!(src.len(), BYTES_PER_BLOCK);
@@ -74,7 +77,10 @@ pub fn dequantize_block(src: &[u8], dst: &mut [f32]) {
 }
 
 pub fn dequantize(src: &[u8], dst: &mut [f32]) {
-    for (block, out) in src.chunks_exact(BYTES_PER_BLOCK).zip(dst.chunks_exact_mut(BLOCK_SIZE)) {
+    for (block, out) in src
+        .chunks_exact(BYTES_PER_BLOCK)
+        .zip(dst.chunks_exact_mut(BLOCK_SIZE))
+    {
         dequantize_block(block, out);
     }
 }

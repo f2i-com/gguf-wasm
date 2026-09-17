@@ -7,40 +7,40 @@ use crate::error::QuantError;
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GgmlType {
-    F32     = 0,
-    F16     = 1,
-    Q4_0    = 2,
-    Q4_1    = 3,
-    Q5_0    = 6,
-    Q5_1    = 7,
-    Q8_0    = 8,
-    Q8_1    = 9,
-    Q2_K    = 10,
-    Q3_K    = 11,
-    Q4_K    = 12,
-    Q5_K    = 13,
-    Q6_K    = 14,
-    Q8_K    = 15,
+    F32 = 0,
+    F16 = 1,
+    Q4_0 = 2,
+    Q4_1 = 3,
+    Q5_0 = 6,
+    Q5_1 = 7,
+    Q8_0 = 8,
+    Q8_1 = 9,
+    Q2_K = 10,
+    Q3_K = 11,
+    Q4_K = 12,
+    Q5_K = 13,
+    Q6_K = 14,
+    Q8_K = 15,
     IQ2_XXS = 16,
-    IQ2_XS  = 17,
+    IQ2_XS = 17,
     IQ3_XXS = 18,
-    IQ1_S   = 19,
-    IQ4_NL  = 20,
-    IQ3_S   = 21,
-    IQ2_S   = 22,
-    IQ4_XS  = 23,
-    I8      = 24,
-    I16     = 25,
-    I32     = 26,
-    I64     = 27,
-    F64     = 28,
-    IQ1_M   = 29,
-    BF16    = 30,
+    IQ1_S = 19,
+    IQ4_NL = 20,
+    IQ3_S = 21,
+    IQ2_S = 22,
+    IQ4_XS = 23,
+    I8 = 24,
+    I16 = 25,
+    I32 = 26,
+    I64 = 27,
+    F64 = 28,
+    IQ1_M = 29,
+    BF16 = 30,
     Q4_0_4_4 = 31,
     Q4_0_4_8 = 32,
     Q4_0_8_8 = 33,
-    TQ1_0   = 34,
-    TQ2_0   = 35,
+    TQ1_0 = 34,
+    TQ2_0 = 35,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -133,48 +133,80 @@ impl GgmlType {
             Q6_K => 128 + 64 + 16 + 2,
             Q8_K => 4 + 256 + 16 * 2,
             IQ2_XXS => 2 + 64,
-            IQ2_XS  => 2 + 64 + 16,
-            IQ2_S   => 2 + 64 + 16 + 8,
+            IQ2_XS => 2 + 64 + 16,
+            IQ2_S => 2 + 64 + 16 + 8,
             IQ3_XXS => 2 + 64 + 32,
-            IQ3_S   => 2 + 64 + 32 + 4 + 8,
-            IQ1_S   => 2 + 32 + 8,
-            IQ1_M   => 32 + 8 + 16,
-            IQ4_NL  => 2 + 16,
-            IQ4_XS  => 2 + 2 + 4 + 128,   // d + scales_h + scales_l[QK_K/64] + qs[QK_K/2]
+            IQ3_S => 2 + 64 + 32 + 4 + 8,
+            IQ1_S => 2 + 32 + 8,
+            IQ1_M => 32 + 8 + 16,
+            IQ4_NL => 2 + 16,
+            IQ4_XS => 2 + 2 + 4 + 128, // d + scales_h + scales_l[QK_K/64] + qs[QK_K/2]
             Q4_0_4_4 | Q4_0_4_8 | Q4_0_8_8 => 18,
-            TQ1_0   => 2 + 53,
-            TQ2_0   => 2 + 64,
+            TQ1_0 => 2 + 53,
+            TQ2_0 => 2 + 64,
         }
     }
 
     pub const fn is_quantized(self) -> bool {
-        !matches!(self, Self::F32 | Self::F16 | Self::BF16 | Self::F64
-                       | Self::I8 | Self::I16 | Self::I32 | Self::I64)
+        !matches!(
+            self,
+            Self::F32
+                | Self::F16
+                | Self::BF16
+                | Self::F64
+                | Self::I8
+                | Self::I16
+                | Self::I32
+                | Self::I64
+        )
     }
 
     pub fn name(self) -> &'static str {
         use GgmlType::*;
         match self {
-            F32 => "F32", F16 => "F16", BF16 => "BF16", F64 => "F64",
-            I8 => "I8", I16 => "I16", I32 => "I32", I64 => "I64",
-            Q4_0 => "Q4_0", Q4_1 => "Q4_1",
-            Q5_0 => "Q5_0", Q5_1 => "Q5_1",
-            Q8_0 => "Q8_0", Q8_1 => "Q8_1",
-            Q2_K => "Q2_K", Q3_K => "Q3_K", Q4_K => "Q4_K",
-            Q5_K => "Q5_K", Q6_K => "Q6_K", Q8_K => "Q8_K",
-            IQ2_XXS => "IQ2_XXS", IQ2_XS => "IQ2_XS", IQ2_S => "IQ2_S",
-            IQ3_XXS => "IQ3_XXS", IQ3_S => "IQ3_S",
-            IQ1_S => "IQ1_S", IQ1_M => "IQ1_M",
-            IQ4_NL => "IQ4_NL", IQ4_XS => "IQ4_XS",
-            Q4_0_4_4 => "Q4_0_4_4", Q4_0_4_8 => "Q4_0_4_8", Q4_0_8_8 => "Q4_0_8_8",
-            TQ1_0 => "TQ1_0", TQ2_0 => "TQ2_0",
+            F32 => "F32",
+            F16 => "F16",
+            BF16 => "BF16",
+            F64 => "F64",
+            I8 => "I8",
+            I16 => "I16",
+            I32 => "I32",
+            I64 => "I64",
+            Q4_0 => "Q4_0",
+            Q4_1 => "Q4_1",
+            Q5_0 => "Q5_0",
+            Q5_1 => "Q5_1",
+            Q8_0 => "Q8_0",
+            Q8_1 => "Q8_1",
+            Q2_K => "Q2_K",
+            Q3_K => "Q3_K",
+            Q4_K => "Q4_K",
+            Q5_K => "Q5_K",
+            Q6_K => "Q6_K",
+            Q8_K => "Q8_K",
+            IQ2_XXS => "IQ2_XXS",
+            IQ2_XS => "IQ2_XS",
+            IQ2_S => "IQ2_S",
+            IQ3_XXS => "IQ3_XXS",
+            IQ3_S => "IQ3_S",
+            IQ1_S => "IQ1_S",
+            IQ1_M => "IQ1_M",
+            IQ4_NL => "IQ4_NL",
+            IQ4_XS => "IQ4_XS",
+            Q4_0_4_4 => "Q4_0_4_4",
+            Q4_0_4_8 => "Q4_0_4_8",
+            Q4_0_8_8 => "Q4_0_8_8",
+            TQ1_0 => "TQ1_0",
+            TQ2_0 => "TQ2_0",
         }
     }
 }
 
 /// Convert a `QuantError` for an unsupported dtype back into a u32 — used by
 /// callers that need to surface the wire tag for diagnostics.
-pub fn dtype_to_tag(t: GgmlType) -> u32 { t as u32 }
+pub fn dtype_to_tag(t: GgmlType) -> u32 {
+    t as u32
+}
 
 #[allow(dead_code)]
 fn _ensure_quanterror_compiles(_: QuantError) {}

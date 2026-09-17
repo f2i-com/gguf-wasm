@@ -10,6 +10,11 @@
 #![cfg_attr(all(not(test), not(feature = "std")), no_std)]
 #![deny(rust_2018_idioms)]
 #![allow(non_camel_case_types)]
+// The block decoders are ports of ggml's, kept line for line so they can be
+// read against that source rather than trusted. `is + 0` and `>> 0` are part of
+// that correspondence: removing them makes the code shorter and the port harder
+// to check, which is the wrong trade for arithmetic nobody can eyeball.
+#![allow(clippy::identity_op)]
 
 //! Decoding is exact. A block holds integers and one or two half-precision
 //! scales, so there is nothing to round differently and a decoder is either
@@ -51,7 +56,7 @@ use half::f16;
 /// Returns `Err` for unsupported dtypes — see [`is_supported`] to gate.
 pub fn dequantize(dtype: GgmlType, src: &[u8], dst: &mut [f32]) -> Result<()> {
     let n = dst.len();
-    if n % dtype.block_size() != 0 {
+    if !n.is_multiple_of(dtype.block_size()) {
         return Err(QuantError::NotBlockAligned {
             n,
             block: dtype.block_size(),
@@ -89,12 +94,21 @@ pub fn dequantize(dtype: GgmlType, src: &[u8], dst: &mut [f32]) -> Result<()> {
 pub fn is_supported(dtype: GgmlType) -> bool {
     matches!(
         dtype,
-        GgmlType::F32 | GgmlType::F16 | GgmlType::BF16
-            | GgmlType::Q4_0 | GgmlType::Q4_1
-            | GgmlType::Q5_0 | GgmlType::Q5_1
+        GgmlType::F32
+            | GgmlType::F16
+            | GgmlType::BF16
+            | GgmlType::Q4_0
+            | GgmlType::Q4_1
+            | GgmlType::Q5_0
+            | GgmlType::Q5_1
             | GgmlType::Q8_0
-            | GgmlType::IQ4_NL | GgmlType::IQ4_XS
-            | GgmlType::Q2_K | GgmlType::Q3_K | GgmlType::Q4_K | GgmlType::Q5_K | GgmlType::Q6_K
+            | GgmlType::IQ4_NL
+            | GgmlType::IQ4_XS
+            | GgmlType::Q2_K
+            | GgmlType::Q3_K
+            | GgmlType::Q4_K
+            | GgmlType::Q5_K
+            | GgmlType::Q6_K
     )
 }
 
@@ -150,7 +164,10 @@ mod tests {
     #[test]
     fn f16_dequant_roundtrip() {
         let xs: Vec<f32> = (0..16).map(|i| i as f32 * 0.5 - 4.0).collect();
-        let bytes: Vec<u8> = xs.iter().flat_map(|x| f16::from_f32(*x).to_bits().to_le_bytes()).collect();
+        let bytes: Vec<u8> = xs
+            .iter()
+            .flat_map(|x| f16::from_f32(*x).to_bits().to_le_bytes())
+            .collect();
         let mut out = vec![0.0; 16];
         dequantize(GgmlType::F16, &bytes, &mut out).unwrap();
         for (a, b) in out.iter().zip(xs.iter()) {
@@ -180,7 +197,9 @@ mod tests {
         let qs: Vec<i8> = (-16..16).collect();
         let mut bytes = Vec::new();
         write_f16_le(&mut bytes, d);
-        for q in &qs { bytes.push(*q as u8); }
+        for q in &qs {
+            bytes.push(*q as u8);
+        }
         assert_eq!(bytes.len(), 34);
 
         let mut out = vec![0.0; 32];
@@ -188,8 +207,12 @@ mod tests {
 
         for (i, q) in qs.iter().enumerate() {
             let expected = (*q as f32) * f16::from_f32(d).to_f32();
-            assert!((out[i] - expected).abs() < 1e-6,
-                    "q8_0 i={i}: {} vs {}", out[i], expected);
+            assert!(
+                (out[i] - expected).abs() < 1e-6,
+                "q8_0 i={i}: {} vs {}",
+                out[i],
+                expected
+            );
         }
     }
 
@@ -202,7 +225,9 @@ mod tests {
         bytes.extend_from_slice(&[0x88; 16]);
         let mut out = vec![0.0; 32];
         dequantize(GgmlType::Q4_0, &bytes, &mut out).unwrap();
-        for v in out { assert_eq!(v, 0.0); }
+        for v in out {
+            assert_eq!(v, 0.0);
+        }
     }
 
     /// Q4_0 with d=2.0 and varying nibbles. nibble n -> (n - 8) * 2.0.
@@ -229,15 +254,17 @@ mod tests {
     #[test]
     fn q5_0_no_high_bits() {
         let mut bytes = Vec::new();
-        write_f16_le(&mut bytes, 1.0);            // d
-        bytes.extend_from_slice(&[0u8; 4]);       // qh = 0
-        for i in 0..16u8 { bytes.push((i << 4) | i); }
+        write_f16_le(&mut bytes, 1.0); // d
+        bytes.extend_from_slice(&[0u8; 4]); // qh = 0
+        for i in 0..16u8 {
+            bytes.push((i << 4) | i);
+        }
         let mut out = vec![0.0; 32];
         dequantize(GgmlType::Q5_0, &bytes, &mut out).unwrap();
         let d = f16::from_f32(1.0).to_f32();
-        for i in 0..16 {
+        for (i, value) in out.iter().take(16).enumerate() {
             let expected = (i as f32 - 16.0) * d;
-            assert!((out[i] - expected).abs() < 1e-5);
+            assert!((value - expected).abs() < 1e-5);
         }
     }
 
@@ -247,7 +274,9 @@ mod tests {
         let mut bytes = Vec::new();
         write_f16_le(&mut bytes, 1.0);
         bytes.extend_from_slice(&0xFFFFFFFFu32.to_le_bytes());
-        for i in 0..16u8 { bytes.push((i << 4) | i); }
+        for i in 0..16u8 {
+            bytes.push((i << 4) | i);
+        }
         let mut out = vec![0.0; 32];
         dequantize(GgmlType::Q5_0, &bytes, &mut out).unwrap();
         for i in 0..16 {
@@ -267,7 +296,9 @@ mod tests {
         bytes[2..4].copy_from_slice(&one);
         let mut out = vec![1.0; 256];
         dequantize(GgmlType::Q4_K, &bytes, &mut out).unwrap();
-        for v in out { assert_eq!(v, 0.0); }
+        for v in out {
+            assert_eq!(v, 0.0);
+        }
     }
 
     /// IQ4_NL: with qs=0 (low nibble 0 -> KVALUES[0] = -127), check decode against
@@ -287,10 +318,18 @@ mod tests {
         for i in 0..16 {
             let lo_expected = d16 * iq4_nl::KVALUES_IQ4NL[i] as f32;
             let hi_expected = d16 * iq4_nl::KVALUES_IQ4NL[15 - i] as f32;
-            assert!((out[i] - lo_expected).abs() < 1e-5,
-                    "iq4_nl lo i={i}: {} vs {}", out[i], lo_expected);
-            assert!((out[i + 16] - hi_expected).abs() < 1e-5,
-                    "iq4_nl hi i={i}: {} vs {}", out[i + 16], hi_expected);
+            assert!(
+                (out[i] - lo_expected).abs() < 1e-5,
+                "iq4_nl lo i={i}: {} vs {}",
+                out[i],
+                lo_expected
+            );
+            assert!(
+                (out[i + 16] - hi_expected).abs() < 1e-5,
+                "iq4_nl hi i={i}: {} vs {}",
+                out[i + 16],
+                hi_expected
+            );
         }
     }
 
@@ -304,9 +343,12 @@ mod tests {
         bytes[0..2].copy_from_slice(&one);
         // scales_h: 2 bits per sub-block × 8 sub-blocks. Each pair = 0b10.
         // 0b10 repeated 8 times = 0b1010_1010_1010_1010 = 0xAAAA
-        bytes[2] = 0xAA; bytes[3] = 0xAA;
+        bytes[2] = 0xAA;
+        bytes[3] = 0xAA;
         // scales_l[4]: low 4 bits = 0 for every sub-block
-        for i in 0..4 { bytes[4 + i] = 0x00; }
+        for i in 0..4 {
+            bytes[4 + i] = 0x00;
+        }
         let mut out = vec![1.0; 256];
         dequantize(GgmlType::IQ4_XS, &bytes, &mut out).unwrap();
         for (i, v) in out.iter().enumerate() {
@@ -318,11 +360,15 @@ mod tests {
     #[test]
     fn q2_k_zero_d_dmin_zeros_output() {
         let mut bytes = vec![0xFFu8; q2_k::BYTES_PER_BLOCK];
-        bytes[80] = 0; bytes[81] = 0;   // d (f16) = 0
-        bytes[82] = 0; bytes[83] = 0;   // dmin (f16) = 0
+        bytes[80] = 0;
+        bytes[81] = 0; // d (f16) = 0
+        bytes[82] = 0;
+        bytes[83] = 0; // dmin (f16) = 0
         let mut out = vec![1.0; 256];
         dequantize(GgmlType::Q2_K, &bytes, &mut out).unwrap();
-        for v in out { assert_eq!(v, 0.0); }
+        for v in out {
+            assert_eq!(v, 0.0);
+        }
     }
 
     /// Q3_K with d=0 -> all zero output regardless of remaining bytes.
@@ -330,10 +376,13 @@ mod tests {
     fn q3_k_zero_d_zeros_output() {
         let mut bytes = vec![0xFFu8; q3_k::BYTES_PER_BLOCK];
         // d (f16 little-endian) = 0
-        bytes[108] = 0; bytes[109] = 0;
+        bytes[108] = 0;
+        bytes[109] = 0;
         let mut out = vec![1.0; 256];
         dequantize(GgmlType::Q3_K, &bytes, &mut out).unwrap();
-        for v in out { assert_eq!(v, 0.0); }
+        for v in out {
+            assert_eq!(v, 0.0);
+        }
     }
 
     /// Q3_K canonical block: d=1.0, all scales decode to 32 (so scale_signed = scale - 32 = 0)
@@ -346,11 +395,15 @@ mod tests {
     /// For all-32 scales: bytes 0..8 = 0x00, bytes 8..12 = 0xAA (0b10101010).
     #[test]
     fn q3_k_zero_scales_after_offset() {
-        let mut bytes = vec![0xFFu8; q3_k::BYTES_PER_BLOCK];   // qs/hmask non-zero
+        let mut bytes = vec![0xFFu8; q3_k::BYTES_PER_BLOCK]; // qs/hmask non-zero
         let one = f16::from_f32(1.0).to_bits().to_le_bytes();
         bytes[108..110].copy_from_slice(&one);
-        for j in 0..8 { bytes[96 + j] = 0x00; }
-        for j in 0..4 { bytes[96 + 8 + j] = 0xAA; }
+        for j in 0..8 {
+            bytes[96 + j] = 0x00;
+        }
+        for j in 0..4 {
+            bytes[96 + 8 + j] = 0xAA;
+        }
         let mut out = vec![1.0; 256];
         dequantize(GgmlType::Q3_K, &bytes, &mut out).unwrap();
         for (i, v) in out.iter().enumerate() {
@@ -367,10 +420,14 @@ mod tests {
         bytes[0..2].copy_from_slice(&one);
         bytes[2..4].copy_from_slice(&one);
         // 8 6-bit scales = 1, 8 6-bit mins = 0  ->  scales[0..4]=0x01, scales[4..8]=0x00
-        for i in 0..4 { bytes[4 + i] = 0x01; }
+        for i in 0..4 {
+            bytes[4 + i] = 0x01;
+        }
         let mut out = vec![1.0; 256];
         dequantize(GgmlType::Q5_K, &bytes, &mut out).unwrap();
-        for v in out { assert_eq!(v, 0.0); }
+        for v in out {
+            assert_eq!(v, 0.0);
+        }
     }
 
     /// Q5_K with high bits set and a known low nibble — verifies high-bit promotion.
@@ -383,14 +440,21 @@ mod tests {
         let one = f16::from_f32(1.0).to_bits().to_le_bytes();
         bytes[0..2].copy_from_slice(&one);
         bytes[2..4].copy_from_slice(&one);
-        for i in 0..4 { bytes[4 + i] = 0x01; }   // 8 6-bit scales = 1
-        bytes[16] = 0x01;                         // qh[0]: bit 0 set => sub-block 0 high bit on for value 0
-        bytes[48] = 0x01;                         // qs[0] low nibble = 1
+        for i in 0..4 {
+            bytes[4 + i] = 0x01;
+        } // 8 6-bit scales = 1
+        bytes[16] = 0x01; // qh[0]: bit 0 set => sub-block 0 high bit on for value 0
+        bytes[48] = 0x01; // qs[0] low nibble = 1
         let mut out = vec![0.0; 256];
         dequantize(GgmlType::Q5_K, &bytes, &mut out).unwrap();
         let d = f16::from_f32(1.0).to_f32();
         let expected = d * 1.0 * (1.0 + 16.0);
-        assert!((out[0] - expected).abs() < 1e-5, "out[0]={} expected={}", out[0], expected);
+        assert!(
+            (out[0] - expected).abs() < 1e-5,
+            "out[0]={} expected={}",
+            out[0],
+            expected
+        );
     }
 
     /// Q6_K with d=0, scales=0 -> all zero output regardless of ql/qh.
@@ -398,11 +462,16 @@ mod tests {
     fn q6_k_zero_scales_zeros_output() {
         let mut bytes = vec![0xFFu8; q6_k::BYTES_PER_BLOCK];
         // scales[16] = 0 (i8)
-        for i in 0..16 { bytes[192 + i] = 0; }
+        for i in 0..16 {
+            bytes[192 + i] = 0;
+        }
         // d = 0 (f16)
-        bytes[208] = 0; bytes[209] = 0;
+        bytes[208] = 0;
+        bytes[209] = 0;
         let mut out = vec![1.0; 256];
         dequantize(GgmlType::Q6_K, &bytes, &mut out).unwrap();
-        for v in out { assert_eq!(v, 0.0); }
+        for v in out {
+            assert_eq!(v, 0.0);
+        }
     }
 }

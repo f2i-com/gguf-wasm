@@ -19,10 +19,12 @@ pub const BYTES_PER_BLOCK: usize = 18;
 /// Non-linear lookup table from upstream ggml-quants. Spaced to approximate
 /// a Gaussian distribution of weights better than uniform [-8, 7] would.
 pub const KVALUES_IQ4NL: [i8; 16] = [
-    -127, -104, -83, -65, -49, -35, -22, -10,
-       1,   13,  25,  38,  53,  69,  89, 113,
+    -127, -104, -83, -65, -49, -35, -22, -10, 1, 13, 25, 38, 53, 69, 89, 113,
 ];
 
+// Laid out to match ggml's own source line for line, which is how this is
+// verified: the alignment is the correspondence, not decoration.
+#[rustfmt::skip]
 #[inline]
 pub fn dequantize_block(src: &[u8], dst: &mut [f32]) {
     debug_assert_eq!(src.len(), BYTES_PER_BLOCK);
@@ -40,7 +42,10 @@ pub fn dequantize_block(src: &[u8], dst: &mut [f32]) {
 }
 
 pub fn dequantize(src: &[u8], dst: &mut [f32]) {
-    for (block, out) in src.chunks_exact(BYTES_PER_BLOCK).zip(dst.chunks_exact_mut(BLOCK_SIZE)) {
+    for (block, out) in src
+        .chunks_exact(BYTES_PER_BLOCK)
+        .zip(dst.chunks_exact_mut(BLOCK_SIZE))
+    {
         dequantize_block(block, out);
     }
 }

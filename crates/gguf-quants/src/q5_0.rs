@@ -12,6 +12,9 @@ use crate::read_f16;
 pub const BLOCK_SIZE: usize = 32;
 pub const BYTES_PER_BLOCK: usize = 22;
 
+// Laid out to match ggml's own source line for line, which is how this is
+// verified: the alignment is the correspondence, not decoration.
+#[rustfmt::skip]
 #[inline]
 pub fn dequantize_block(src: &[u8], dst: &mut [f32]) {
     debug_assert_eq!(src.len(), BYTES_PER_BLOCK);
@@ -32,7 +35,10 @@ pub fn dequantize_block(src: &[u8], dst: &mut [f32]) {
 }
 
 pub fn dequantize(src: &[u8], dst: &mut [f32]) {
-    for (block, out) in src.chunks_exact(BYTES_PER_BLOCK).zip(dst.chunks_exact_mut(BLOCK_SIZE)) {
+    for (block, out) in src
+        .chunks_exact(BYTES_PER_BLOCK)
+        .zip(dst.chunks_exact_mut(BLOCK_SIZE))
+    {
         dequantize_block(block, out);
     }
 }

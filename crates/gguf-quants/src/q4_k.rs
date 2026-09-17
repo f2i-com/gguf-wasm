@@ -16,20 +16,23 @@ pub const BYTES_PER_BLOCK: usize = 144;
 /// Unpack a sub-block scale and min for sub-block index `j` (0..8).
 ///
 /// The 12-byte `scales` array packs 8 × 6-bit scales and 8 × 6-bit mins:
-///   - sub-blocks 0..3:  scale = scales[j]   & 0x3F
-///                       min   = scales[j+4] & 0x3F
-///   - sub-blocks 4..7:  bits split across scales[j-4..=j+4]
+///
+/// - sub-blocks 0..3: `scale = scales[j] & 0x3F`, `min = scales[j+4] & 0x3F`
+/// - sub-blocks 4..7: bits split across `scales[j-4..=j+4]`
 #[inline]
 fn unpack_scale_min(j: usize, scales: &[u8]) -> (u8, u8) {
     if j < 4 {
         (scales[j] & 0x3F, scales[j + 4] & 0x3F)
     } else {
         let d = (scales[j + 4] & 0x0F) | ((scales[j - 4] >> 6) << 4);
-        let m = (scales[j + 4] >> 4)   | ((scales[j]     >> 6) << 4);
+        let m = (scales[j + 4] >> 4) | ((scales[j] >> 6) << 4);
         (d, m)
     }
 }
 
+// Laid out to match ggml's own source line for line, which is how this is
+// verified: the alignment is the correspondence, not decoration.
+#[rustfmt::skip]
 #[inline]
 pub fn dequantize_block(src: &[u8], dst: &mut [f32]) {
     debug_assert_eq!(src.len(), BYTES_PER_BLOCK);
@@ -66,7 +69,10 @@ pub fn dequantize_block(src: &[u8], dst: &mut [f32]) {
 }
 
 pub fn dequantize(src: &[u8], dst: &mut [f32]) {
-    for (block, out) in src.chunks_exact(BYTES_PER_BLOCK).zip(dst.chunks_exact_mut(BLOCK_SIZE)) {
+    for (block, out) in src
+        .chunks_exact(BYTES_PER_BLOCK)
+        .zip(dst.chunks_exact_mut(BLOCK_SIZE))
+    {
         dequantize_block(block, out);
     }
 }

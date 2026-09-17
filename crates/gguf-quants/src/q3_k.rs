@@ -37,8 +37,8 @@ fn unpack_scales(scales: &[u8]) -> [i8; 16] {
     let tmp = aux[2];
     aux[3] = ((aux[1] >> 4) & KMASK2) | (((tmp >> 6) & KMASK1) << 4);
     aux[2] = ((aux[0] >> 4) & KMASK2) | (((tmp >> 4) & KMASK1) << 4);
-    aux[1] = (aux[1] & KMASK2)        | (((tmp >> 2) & KMASK1) << 4);
-    aux[0] = (aux[0] & KMASK2)        | (((tmp >> 0) & KMASK1) << 4);
+    aux[1] = (aux[1] & KMASK2) | (((tmp >> 2) & KMASK1) << 4);
+    aux[0] = (aux[0] & KMASK2) | (((tmp >> 0) & KMASK1) << 4);
 
     let mut out = [0i8; 16];
     for i in 0..4 {
@@ -51,6 +51,9 @@ fn unpack_scales(scales: &[u8]) -> [i8; 16] {
     out
 }
 
+// Laid out to match ggml's own source line for line, which is how this is
+// verified: the alignment is the correspondence, not decoration.
+#[rustfmt::skip]
 #[inline]
 pub fn dequantize_block(src: &[u8], dst: &mut [f32]) {
     debug_assert_eq!(src.len(), BYTES_PER_BLOCK);
@@ -92,7 +95,10 @@ pub fn dequantize_block(src: &[u8], dst: &mut [f32]) {
 }
 
 pub fn dequantize(src: &[u8], dst: &mut [f32]) {
-    for (block, out) in src.chunks_exact(BYTES_PER_BLOCK).zip(dst.chunks_exact_mut(BLOCK_SIZE)) {
+    for (block, out) in src
+        .chunks_exact(BYTES_PER_BLOCK)
+        .zip(dst.chunks_exact_mut(BLOCK_SIZE))
+    {
         dequantize_block(block, out);
     }
 }

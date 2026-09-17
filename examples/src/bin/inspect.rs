@@ -13,16 +13,26 @@ use gguf::{GgufReader, Value};
 fn main() {
     let path = match env::args().nth(1) {
         Some(path) => path,
-        None => { eprintln!("usage: inspect <model.gguf>"); std::process::exit(2); }
+        None => {
+            eprintln!("usage: inspect <model.gguf>");
+            std::process::exit(2);
+        }
     };
     let reader = match GgufReader::open(&path) {
         Ok(reader) => reader,
-        Err(error) => { eprintln!("{path}: {error}"); std::process::exit(1); }
+        Err(error) => {
+            eprintln!("{path}: {error}");
+            std::process::exit(1);
+        }
     };
     let header = reader.header();
 
     println!("{path}");
-    println!("  {:.2} GB on disk, GGUF v{}", reader.size() as f64 / 1e9, header.version());
+    println!(
+        "  {:.2} GB on disk, GGUF v{}",
+        reader.size() as f64 / 1e9,
+        header.version()
+    );
 
     // A long array is a vocabulary; say how long rather than printing it.
     println!("\nmetadata");
@@ -43,15 +53,27 @@ fn main() {
         entry.1 += tensor.nbytes();
         total += tensor.numel();
     }
-    println!("\n{} tensors, {:.2}B parameters", header.tensors().len(), total as f64 / 1e9);
+    println!(
+        "\n{} tensors, {:.2}B parameters",
+        header.tensors().len(),
+        total as f64 / 1e9
+    );
     for (dtype, (count, bytes)) in &by_dtype {
-        println!("  {dtype:<8} {count:>4} tensors  {:>8.1} MiB", *bytes as f64 / 1048576.0);
+        println!(
+            "  {dtype:<8} {count:>4} tensors  {:>8.1} MiB",
+            *bytes as f64 / 1048576.0
+        );
     }
 
     // The biggest is usually the embedding table, and usually the reason
     // reading a row at a time matters.
     if let Some(biggest) = header.tensors().iter().max_by_key(|t| t.numel()) {
-        println!("\nlargest: {} {:?} {:?}, {:.1} MiB",
-            biggest.name, biggest.shape, biggest.dtype, biggest.nbytes() as f64 / 1048576.0);
+        println!(
+            "\nlargest: {} {:?} {:?}, {:.1} MiB",
+            biggest.name,
+            biggest.shape,
+            biggest.dtype,
+            biggest.nbytes() as f64 / 1048576.0
+        );
     }
 }
