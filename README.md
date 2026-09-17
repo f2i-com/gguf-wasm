@@ -60,7 +60,7 @@ unrelated crate. The *library* names do not, so a consumer aliases the package
 once and `use gguf::...` reads the way you would expect:
 
 ```toml
-gguf = { package = "f2i-gguf", version = "0.0.1", features = ["std"] }
+gguf = { package = "f2i-gguf", version = "0.0.2", features = ["std"] }
 ```
 
 Everything except the wasm surface builds without `std`, which is what lets the
@@ -110,7 +110,7 @@ plausible header and a couple of thousand rounds of arbitrary bytes.
 
 ```toml
 [dependencies]
-gguf = { package = "f2i-gguf", version = "0.0.1", features = ["std"] }
+gguf = { package = "f2i-gguf", version = "0.0.2", features = ["std"] }
 ```
 
 ```rust
