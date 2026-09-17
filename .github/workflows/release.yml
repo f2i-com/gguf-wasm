@@ -75,8 +75,16 @@ jobs:
             cp README.md LICENSE-MIT LICENSE-APACHE "$target/"
           done
           cp js/index.mjs pkg/index.mjs
-          tar -czf "dist/gguf-wasm-web-$version.tar.gz" -C pkg .
-          tar -czf "dist/gguf-wasm-node-$version.tar.gz" -C pkg-node .
+          # Deterministic archives: same inputs, same bytes. `tar -z` stamps
+          # the gzip header with the current time and tar records each file's
+          # mtime, owner and whatever order readdir returned, so an identical
+          # tree would otherwise produce a different digest on every run --
+          # which makes the digests a consumer pins unverifiable by rebuild.
+          for target in web:pkg node:pkg-node; do
+            name="${target%%:*}"; dir="${target##*:}"
+            tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
+              -cf - -C "$dir" . | gzip -n > "dist/gguf-wasm-$name-$version.tar.gz"
+          done
           (cd dist && sha256sum *.tar.gz > SHA256SUMS)
           cat dist/SHA256SUMS
 
