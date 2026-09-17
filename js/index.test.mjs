@@ -189,14 +189,23 @@ test('a server offering no validator at all is refused unless allowed', async ()
 /** A stand-in for the wasm module, answering with whatever tensor table a test
  *  wants. Only what openGGUF actually touches is implemented. */
 function moduleListing(tensors) {
+  const first = tensors[0];
+  // stored is [width, count]; a row is `width` values of four bytes.
+  const width = first.shape?.[0] ?? 0;
   return {
     header_needs_more_bytes: () => false,
+    dequantize: (dtype, bytes, elements) => new Float32Array(elements),
     GgufHeader: class {
       constructor() {}
       version() { return 3; }
       metadata() { return JSON.stringify({'general.architecture': 'test'}); }
       tensors() { return JSON.stringify(tensors); }
-      row_range() { return JSON.stringify(tensors[0]); }
+      row_range(name, start) {
+        return JSON.stringify({
+          dtype: first.dtype, elements: width,
+          offset: first.offset + start * width * 4, bytes: width * 4,
+        });
+      }
     },
   };
 }
@@ -254,4 +263,22 @@ test('a valid tensor table opens and reads', async () => {
   assert.equal(model.architecture, 'test');
   assert.deepEqual(model.tensors.get('blk.0.weight').shape, [4, 4]);
   assert.deepEqual([...(await model.bytes('blk.0.weight')).subarray(0, 4)], [1, 2, 3, 4]);
+});
+
+test('a row index the caller made up is refused, not silently converted', async () => {
+  // A row index crosses into the module as a u32, and JavaScript will hand
+  // 2^32+1, -1 or 1.5 to that conversion without complaint -- each of which
+  // reads some other row and returns it as though it were the one asked for.
+  const source = fromBlob(new Blob([new Uint8Array(256)]));
+  // stored [width, count] = [4, 4], so four rows of four.
+  const model = await openGGUF(source, {module: moduleListing(oneTensor())});
+  for (const bad of [4, 5, -1, 1.5, 2 ** 32 + 1, NaN, '2']) {
+    await assert.rejects(
+      model.rows('blk.0.weight', [bad]),
+      /is not one of its 4 rows/,
+      `row ${String(bad)}`);
+  }
+  await assert.rejects(model.rows('blk.0.weight', 3), /takes a list of row indices/);
+  // And a real one still works.
+  assert.equal((await model.rows('blk.0.weight', [0, 1])).length, 8);
 });
