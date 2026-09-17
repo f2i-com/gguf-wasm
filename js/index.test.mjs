@@ -10,7 +10,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import {fromBlob, fromURL, fromFileHandle} from './index.mjs';
+import {fromBlob, fromURL, fromFileHandle, openGGUF} from './index.mjs';
 
 /** A server that honours Range, with whatever identity it is told to have. */
 function server({body, etag = '"v1"', lastModified = null, ignoreRange = false, onRequest = () => {}}) {
@@ -167,4 +167,91 @@ test('a file handle reads exactly what it is asked for', async () => {
   }};
   const source = fromFileHandle(handle, body.length);
   assert.deepEqual([...await source.read(8, 4)], [...body.subarray(8, 12)]);
+});
+
+test('a server offering no validator at all is refused unless allowed', async () => {
+  // Neither ETag nor Last-Modified: nothing to pin reads to, so a replacement
+  // of the same length between two reads would go unnoticed. That is the one
+  // failure this source exists to prevent, so it is not quietly downgraded.
+  const {fetcher} = server({body, etag: null, lastModified: null});
+  await assert.rejects(
+    fromURL('https://example/model.gguf', {fetch: fetcher}).prepare(),
+    /neither ETag nor Last-Modified/);
+
+  const anyway = fromURL('https://example/model.gguf', {fetch: fetcher, allowUnvalidated: true});
+  await anyway.prepare();
+  assert.equal(anyway.identity(), null, 'and it admits it pinned nothing');
+  assert.deepEqual([...await anyway.read(0, 4)], [...body.subarray(0, 4)]);
+});
+
+// ---- ranges out of a header the caller did not write ------------------------
+
+/** A stand-in for the wasm module, answering with whatever tensor table a test
+ *  wants. Only what openGGUF actually touches is implemented. */
+function moduleListing(tensors) {
+  return {
+    header_needs_more_bytes: () => false,
+    GgufHeader: class {
+      constructor() {}
+      version() { return 3; }
+      metadata() { return JSON.stringify({'general.architecture': 'test'}); }
+      tensors() { return JSON.stringify(tensors); }
+      row_range() { return JSON.stringify(tensors[0]); }
+    },
+  };
+}
+
+const oneTensor = extra => [{
+  name: 'blk.0.weight', dtype: 'f32', shape: [4, 4],
+  offset: 64, bytes: 64, elements: 16, readable: true, ...extra,
+}];
+
+test('a tensor pointing past the end of the file is refused at open', async () => {
+  // Blob.slice clamps rather than throwing, so without this check the read
+  // comes back short and a decoder sees a truncated tensor as a valid one.
+  const source = fromBlob(new Blob([new Uint8Array(256)]));
+  await assert.rejects(
+    openGGUF(source, {module: moduleListing(oneTensor({offset: 200, bytes: 100}))}),
+    /past the end of a 256-byte file/);
+});
+
+test('a length JavaScript cannot represent exactly is refused at open', async () => {
+  // A GGUF length is a u64 and a JSON number is a double: past 2^53 the value
+  // arrives near what the file said rather than equal to it.
+  const source = fromBlob(new Blob([new Uint8Array(256)]));
+  for (const field of ['offset', 'bytes', 'elements']) {
+    await assert.rejects(
+      openGGUF(source, {module: moduleListing(oneTensor({[field]: 2 ** 53 + 1}))}),
+      new RegExp(`${field} is .*not a byte count this can represent exactly`),
+      `${field} past 2^53`);
+  }
+  await assert.rejects(
+    openGGUF(source, {module: moduleListing(oneTensor({offset: -1}))}),
+    /offset is -1/);
+});
+
+test('a header that is not one fails without reading the whole file', async () => {
+  // The doubling loop must tell a short read from a file that will never
+  // parse, or opening the wrong file costs the full 64 MiB schedule.
+  let reads = 0;
+  const source = {
+    size: () => 128 << 20,
+    async read(offset, length) { reads++; return new Uint8Array(length); },
+  };
+  const module = {
+    header_needs_more_bytes: () => false,
+    GgufHeader: class { constructor() { throw new Error('not a GGUF file: bad magic'); } },
+  };
+  await assert.rejects(openGGUF(source, {module}), /bad magic/);
+  assert.equal(reads, 1, 'it stopped after the first read');
+});
+
+test('a valid tensor table opens and reads', async () => {
+  const bytes = new Uint8Array(256);
+  bytes.set([1, 2, 3, 4], 64);
+  const source = fromBlob(new Blob([bytes]));
+  const model = await openGGUF(source, {module: moduleListing(oneTensor())});
+  assert.equal(model.architecture, 'test');
+  assert.deepEqual(model.tensors.get('blk.0.weight').shape, [4, 4]);
+  assert.deepEqual([...(await model.bytes('blk.0.weight')).subarray(0, 4)], [1, 2, 3, 4]);
 });
