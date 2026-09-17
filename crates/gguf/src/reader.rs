@@ -5,8 +5,9 @@
 //! lives; it does not contain one, and it does not keep the bytes it was parsed
 //! from. That is deliberate: a checkpoint is routinely several gigabytes and a
 //! caller reads tensor bodies by range, from a `File`, a `Blob`, a ranged
-//! request or a peer. The `std` feature's [`crate::GgufReader`] is where an
-//! actual file gets read.
+//! request or a peer. The `std` feature's `GgufReader` is where an actual file
+//! gets read -- not linked, because without that feature there is no such item
+//! and a link to it would be a warning in exactly the build a browser uses.
 //!
 //! ## Parsing something you did not write
 //!

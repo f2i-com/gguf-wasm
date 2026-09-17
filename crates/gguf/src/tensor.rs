@@ -17,8 +17,12 @@ pub struct TensorInfo {
 
     pub dtype: GgmlType,
 
-    /// Offset *within the tensor data section* (not the file). Caller adds
-    /// `GgufFile::tensor_data_start` to get the absolute file offset.
+    /// Offset *within the tensor data section* (not the file). Add
+    /// [`GgufHeader::tensor_data_start`] for the absolute file offset, or use
+    /// [`GgufHeader::range_of`], which has done that already.
+    ///
+    /// [`GgufHeader::tensor_data_start`]: crate::GgufHeader::tensor_data_start
+    /// [`GgufHeader::range_of`]: crate::GgufHeader::range_of
     pub offset: u64,
 }
 
