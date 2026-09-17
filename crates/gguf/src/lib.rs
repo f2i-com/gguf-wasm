@@ -41,7 +41,7 @@ pub mod value;
 pub use error::{GgufError, Result};
 #[cfg(feature = "std")]
 pub use file::GgufReader;
-pub use reader::GgufFile;
+pub use reader::{GgufHeader, ParseLimits, TensorRange};
 pub use tensor::{GgmlType, TensorInfo};
 pub use value::{Array, Value, ValueType};
 

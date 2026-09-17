@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use gguf::{GgmlType, GgufFile, TensorInfo, Value};
+use gguf::{GgmlType, GgufHeader, TensorInfo, Value};
 use gguf_wasm::{dtype_by_name, plain};
 
 /// A file with two tensors: one dense, one Q4_K, both with rows that are a
@@ -17,7 +17,9 @@ use gguf_wasm::{dtype_by_name, plain};
 fn fixture() -> (Vec<u8>, Vec<f32>) {
     const WIDTH: usize = 256;
     const ROWS: usize = 6;
-    let dense: Vec<f32> = (0..WIDTH * ROWS).map(|i| (i as f32) * 0.25 - 100.0).collect();
+    let dense: Vec<f32> = (0..WIDTH * ROWS)
+        .map(|i| (i as f32) * 0.25 - 100.0)
+        .collect();
     let mut dense_bytes = Vec::with_capacity(dense.len() * 4);
     for value in &dense {
         dense_bytes.extend_from_slice(&value.to_le_bytes());
@@ -25,10 +27,15 @@ fn fixture() -> (Vec<u8>, Vec<f32>) {
     // Q4_K blocks of plausible shape; the values need not be meaningful, only
     // consistent between the two ways of reading them.
     let block = gguf_quants::q4_k::BYTES_PER_BLOCK;
-    let quantized: Vec<u8> = (0..block * ROWS).map(|i| ((i * 7 + 3) % 251) as u8).collect();
+    let quantized: Vec<u8> = (0..block * ROWS)
+        .map(|i| ((i * 7 + 3) % 251) as u8)
+        .collect();
 
     let metadata = BTreeMap::from([
-        ("general.architecture".to_string(), Value::String("test".into())),
+        (
+            "general.architecture".to_string(),
+            Value::String("test".into()),
+        ),
         ("general.alignment".to_string(), Value::U32(32)),
     ]);
     let tensors = vec![
@@ -58,51 +65,68 @@ fn fixture() -> (Vec<u8>, Vec<f32>) {
 #[test]
 fn a_tensor_range_is_where_the_reader_finds_it() {
     let (bytes, _) = fixture();
-    let file = GgufFile::from_bytes(bytes.clone()).expect("parse");
+    let file = GgufHeader::from_bytes(&bytes).expect("parse");
     let reported: serde_lite::Value = serde_lite::parse(&plain::tensors_json(&file));
 
     for tensor in file.tensors() {
         let entry = reported.find(&tensor.name);
         let offset = entry.number("offset") as usize;
         let length = entry.number("bytes") as usize;
-        // The reader's own slice of this tensor, and the range we told a caller
-        // to read, must be the same bytes.
-        assert_eq!(&bytes[offset..offset + length], file.tensor_data(tensor),
-                   "{} range disagrees with the reader", tensor.name);
+        // The range the header reports and the range we tell a caller to read
+        // must be the same bytes.
+        let range = file.tensor_range(tensor);
+        assert_eq!(
+            (offset as u64, length as u64),
+            (range.offset, range.bytes),
+            "{} range disagrees with the header",
+            tensor.name
+        );
     }
 }
 
 #[test]
 fn a_row_range_lands_on_that_row() {
     let (bytes, dense) = fixture();
-    let file = GgufFile::from_bytes(bytes.clone()).expect("parse");
+    let file = GgufHeader::from_bytes(&bytes).expect("parse");
     const WIDTH: usize = 256;
 
     for (start, count) in [(0u32, 1u32), (2, 3), (5, 1)] {
-        let range: serde_lite::Value = serde_lite::parse(
-            &plain::row_range_json(&file, "dense", start, count).expect("range"));
+        let range: serde_lite::Value =
+            serde_lite::parse(&plain::row_range_json(&file, "dense", start, count).expect("range"));
         let offset = range.number("offset") as usize;
         let length = range.number("bytes") as usize;
         let elements = range.number("elements") as u32;
         assert_eq!(elements as usize, count as usize * WIDTH);
-        let floats = plain::dequantize_bytes(dtype_by_name("F32").unwrap(),
-                                            &bytes[offset..offset + length], elements).expect("floats");
+        let floats = plain::dequantize_bytes(
+            dtype_by_name("F32").unwrap(),
+            &bytes[offset..offset + length],
+            elements,
+        )
+        .expect("floats");
         let first = start as usize * WIDTH;
-        assert_eq!(floats, &dense[first..first + elements as usize],
-                   "rows {start}..{} are not the rows they claim", start + count);
+        assert_eq!(
+            floats,
+            &dense[first..first + elements as usize],
+            "rows {start}..{} are not the rows they claim",
+            start + count
+        );
     }
 }
 
 #[test]
 fn a_quantized_row_starts_on_a_block_boundary() {
     let (bytes, _) = fixture();
-    let file = GgufFile::from_bytes(bytes).expect("parse");
+    let file = GgufHeader::from_bytes(&bytes).expect("parse");
     let whole: serde_lite::Value =
         serde_lite::parse(&plain::row_range_json(&file, "quantized", 0, 6).expect("range"));
     let one: serde_lite::Value =
         serde_lite::parse(&plain::row_range_json(&file, "quantized", 3, 1).expect("range"));
     let block = gguf_quants::q4_k::BYTES_PER_BLOCK as f64;
-    assert_eq!(one.number("bytes"), block, "a 256-wide Q4_K row is one block");
+    assert_eq!(
+        one.number("bytes"),
+        block,
+        "a 256-wide Q4_K row is one block"
+    );
     assert_eq!(one.number("offset") - whole.number("offset"), 3.0 * block);
     assert_eq!(whole.number("bytes"), 6.0 * block);
 }
@@ -110,8 +134,11 @@ fn a_quantized_row_starts_on_a_block_boundary() {
 #[test]
 fn rows_past_the_end_are_refused() {
     let (bytes, _) = fixture();
-    let file = GgufFile::from_bytes(bytes).expect("parse");
-    assert!(plain::row_range_json(&file, "dense", 5, 2).is_err(), "six rows, not seven");
+    let file = GgufHeader::from_bytes(&bytes).expect("parse");
+    assert!(
+        plain::row_range_json(&file, "dense", 5, 2).is_err(),
+        "six rows, not seven"
+    );
     assert!(plain::row_range_json(&file, "dense", 99, 1).is_err());
     assert!(plain::row_range_json(&file, "missing", 0, 1).is_err());
 }
@@ -130,19 +157,28 @@ mod serde_lite {
         /// The object in an array whose "name" is `name`, or this value itself.
         pub fn find(&self, name: &str) -> Value {
             let needle = format!("\"name\":\"{name}\"");
-            let start = self.0.find(&needle).unwrap_or_else(|| panic!("no entry {name}"));
+            let start = self
+                .0
+                .find(&needle)
+                .unwrap_or_else(|| panic!("no entry {name}"));
             let end = self.0[start..].find('}').expect("unterminated") + start;
             Value(self.0[start..end].to_string())
         }
 
         pub fn number(&self, key: &str) -> f64 {
             let needle = format!("\"{key}\":");
-            let start = self.0.find(&needle).unwrap_or_else(|| panic!("no key {key}")) + needle.len();
+            let start = self
+                .0
+                .find(&needle)
+                .unwrap_or_else(|| panic!("no key {key}"))
+                + needle.len();
             let rest = &self.0[start..];
             let end = rest
                 .find(|c: char| !(c.is_ascii_digit() || c == '-' || c == '.' || c == 'e'))
                 .unwrap_or(rest.len());
-            rest[..end].parse().unwrap_or_else(|_| panic!("{key} is not a number: {rest:.20}"))
+            rest[..end]
+                .parse()
+                .unwrap_or_else(|_| panic!("{key} is not a number: {rest:.20}"))
         }
     }
 }

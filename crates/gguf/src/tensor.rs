@@ -23,12 +23,23 @@ pub struct TensorInfo {
 }
 
 impl TensorInfo {
-    pub fn numel(&self) -> u64 { self.shape.iter().product() }
+    /// How many values this tensor holds.
+    ///
+    /// Saturating, not wrapping. A `TensorInfo` the parser produced can never
+    /// reach the ceiling -- the product is checked there, against
+    /// `ParseLimits::max_tensor_elements` -- but one built by hand could, and
+    /// a shape from an untrusted file must not turn into a small plausible
+    /// number by wrapping.
+    pub fn numel(&self) -> u64 {
+        self.shape
+            .iter()
+            .fold(1u64, |total, d| total.saturating_mul(*d))
+    }
 
+    /// How many bytes it occupies, in whatever format it is stored in.
+    /// Saturating, for the same reason.
     pub fn nbytes(&self) -> u64 {
-        let n = self.numel();
-        let block = self.dtype.block_size() as u64;
-        let ts = self.dtype.type_size() as u64;
-        (n / block) * ts
+        let block = (self.dtype.block_size() as u64).max(1);
+        (self.numel() / block).saturating_mul(self.dtype.type_size() as u64)
     }
 }

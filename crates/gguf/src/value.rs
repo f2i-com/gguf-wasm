@@ -210,15 +210,27 @@ impl Value {
     }
 
     pub fn as_bool(&self) -> Option<bool> {
-        if let Self::Bool(b) = *self { Some(b) } else { None }
+        if let Self::Bool(b) = *self {
+            Some(b)
+        } else {
+            None
+        }
     }
 
     pub fn as_str(&self) -> Option<&str> {
-        if let Self::String(s) = self { Some(s.as_str()) } else { None }
+        if let Self::String(s) = self {
+            Some(s.as_str())
+        } else {
+            None
+        }
     }
 
     pub fn as_array(&self) -> Option<&Array> {
-        if let Self::Array(a) = self { Some(a) } else { None }
+        if let Self::Array(a) = self {
+            Some(a)
+        } else {
+            None
+        }
     }
 }
 

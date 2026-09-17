@@ -15,9 +15,9 @@
 //! Nothing here executes a model. It turns a file into tensors; what runs them
 //! is the caller's business.
 
-use gguf::{GgmlType, GgufFile};
-use wasm_bindgen::prelude::*;
+use gguf::{GgmlType, GgufHeader as Header};
 use gguf_tokenizer::Pattern;
+use wasm_bindgen::prelude::*;
 
 fn fail(error: impl core::fmt::Display) -> JsValue {
     JsValue::from_str(&error.to_string())
@@ -99,7 +99,11 @@ fn push_array(out: &mut String, array: &gguf::Array) {
     use gguf::Array;
     let count = array_len(array);
     if count > INLINE_LIMIT {
-        let kind = if matches!(array, Array::String(_)) { "strings" } else { "numbers" };
+        let kind = if matches!(array, Array::String(_)) {
+            "strings"
+        } else {
+            "numbers"
+        };
         out.push_str(&format!("{{\"{kind}\":{count}}}"));
         return;
     }
@@ -159,9 +163,9 @@ fn push_array(out: &mut String, array: &gguf::Array) {
 /// wasm_bindgen layer below wraps these; they are what the tests exercise,
 /// because a `JsValue` cannot be constructed off the wasm target at all.
 pub mod plain {
-    use super::{push_json_string, GgmlType, GgufFile};
+    use super::{push_json_string, GgmlType, Header};
 
-    pub fn tensors_json(file: &GgufFile) -> String {
+    pub fn tensors_json(file: &Header) -> String {
         let start = file.tensor_data_start();
         let mut out = String::from("[");
         for (index, tensor) in file.tensors().iter().enumerate() {
@@ -191,7 +195,12 @@ pub mod plain {
         out
     }
 
-    pub fn row_range_json(file: &GgufFile, name: &str, start: u32, count: u32) -> Result<String, String> {
+    pub fn row_range_json(
+        file: &Header,
+        name: &str,
+        start: u32,
+        count: u32,
+    ) -> Result<String, String> {
         let info = file
             .tensor_by_name(name)
             .ok_or_else(|| format!("no tensor named {name}"))?;
@@ -223,7 +232,11 @@ pub mod plain {
         ))
     }
 
-    pub fn dequantize_bytes(dtype: GgmlType, bytes: &[u8], elements: u32) -> Result<Vec<f32>, String> {
+    pub fn dequantize_bytes(
+        dtype: GgmlType,
+        bytes: &[u8],
+        elements: u32,
+    ) -> Result<Vec<f32>, String> {
         let mut out = vec![0f32; elements as usize];
         gguf_quants::dequantize(dtype, bytes, &mut out).map_err(|e| e.to_string())?;
         Ok(out)
@@ -264,7 +277,7 @@ fn dtype_of(name: &str) -> Result<GgmlType, JsValue> {
 /// A GGUF file's header: its metadata and where every tensor lives.
 #[wasm_bindgen]
 pub struct GgufHeader {
-    file: GgufFile,
+    file: Header,
 }
 
 #[wasm_bindgen]
@@ -276,7 +289,7 @@ impl GgufHeader {
     #[wasm_bindgen(constructor)]
     pub fn new(head: Vec<u8>) -> Result<GgufHeader, JsValue> {
         Ok(Self {
-            file: GgufFile::from_bytes(head).map_err(fail)?,
+            file: Header::from_bytes(&head).map_err(fail)?,
         })
     }
 
@@ -330,7 +343,9 @@ impl GgufHeader {
             Array::F32(v) => cast!(v),
             Array::F64(v) => Ok(v.clone()),
             Array::Bool(v) => Ok(v.iter().map(|b| if *b { 1.0 } else { 0.0 }).collect()),
-            Array::String(_) => Err(JsValue::from_str(&format!("{key} is strings; use strings()"))),
+            Array::String(_) => Err(JsValue::from_str(&format!(
+                "{key} is strings; use strings()"
+            ))),
         }
     }
 
@@ -372,9 +387,12 @@ impl GgufHeader {
             Some(gguf::Value::String(name)) => name.clone(),
             _ => String::from("default"),
         };
-        let pattern = Pattern::from_name(&named).ok_or_else(|| JsValue::from_str(
-            &format!("tokenizer.ggml.pre is {named:?}, which this build does not scan; \
-                      refusing to guess a pre-tokenizer")))?;
+        let pattern = Pattern::from_name(&named).ok_or_else(|| {
+            JsValue::from_str(&format!(
+                "tokenizer.ggml.pre is {named:?}, which this build does not scan; \
+                      refusing to guess a pre-tokenizer"
+            ))
+        })?;
 
         let tokens = strings("tokenizer.ggml.tokens")?;
         // A model with no merge list is not byte-level BPE; say so by name.
@@ -383,14 +401,22 @@ impl GgufHeader {
         // a chat marker stays one token instead of six.
         let mut specials = Vec::new();
         if let Some(gguf::Value::Array(gguf::Array::I32(kinds))) =
-            self.file.metadata().get("tokenizer.ggml.token_type") {
+            self.file.metadata().get("tokenizer.ggml.token_type")
+        {
             for (id, kind) in kinds.iter().enumerate() {
-                if *kind == 3 || *kind == 4 { specials.push(id as u32); }
+                if *kind == 3 || *kind == 4 {
+                    specials.push(id as u32);
+                }
             }
         }
         Ok(Tokenizer {
-            inner: gguf_tokenizer::Tokenizer::new(tokens, merges, pattern, specials,
-                                                  number("tokenizer.ggml.unknown_token_id")),
+            inner: gguf_tokenizer::Tokenizer::new(
+                tokens,
+                merges,
+                pattern,
+                specials,
+                number("tokenizer.ggml.unknown_token_id"),
+            ),
             bos: number("tokenizer.ggml.bos_token_id"),
             eos: number("tokenizer.ggml.eos_token_id"),
             pre: named,
@@ -409,8 +435,7 @@ impl GgufHeader {
     /// is one token's vector: reading those rows costs a few kilobytes where
     /// the whole table would cost a gigabyte.
     pub fn row_range(&self, name: &str, start: u32, count: u32) -> Result<String, JsValue> {
-        plain::row_range_json(&self.file, name, start, count)
-            .map_err(|e| JsValue::from_str(&e))
+        plain::row_range_json(&self.file, name, start, count).map_err(|e| JsValue::from_str(&e))
     }
 }
 
@@ -436,24 +461,34 @@ impl Tokenizer {
     }
 
     #[wasm_bindgen(getter)]
-    pub fn vocab_size(&self) -> usize { self.inner.vocab_size() }
+    pub fn vocab_size(&self) -> usize {
+        self.inner.vocab_size()
+    }
 
     /// Which pre-tokenizer pattern this vocabulary was trained with.
     #[wasm_bindgen(getter)]
-    pub fn pre(&self) -> String { self.pre.clone() }
+    pub fn pre(&self) -> String {
+        self.pre.clone()
+    }
 
     #[wasm_bindgen(getter)]
-    pub fn bos(&self) -> Option<u32> { self.bos }
+    pub fn bos(&self) -> Option<u32> {
+        self.bos
+    }
 
     #[wasm_bindgen(getter)]
-    pub fn eos(&self) -> Option<u32> { self.eos }
+    pub fn eos(&self) -> Option<u32> {
+        self.eos
+    }
 
     /// One token's text, in the byte-level alphabet the vocabulary uses.
     pub fn token(&self, id: u32) -> Option<String> {
         self.inner.token(id).map(String::from)
     }
 
-    pub fn id_of(&self, piece: &str) -> Option<u32> { self.inner.id_of(piece) }
+    pub fn id_of(&self, piece: &str) -> Option<u32> {
+        self.inner.id_of(piece)
+    }
 }
 
 #[wasm_bindgen]

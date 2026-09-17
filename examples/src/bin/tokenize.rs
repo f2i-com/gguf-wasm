@@ -8,10 +8,10 @@
 //! are individually valid and collectively wrong.
 use std::env;
 
-use gguf::{Array, GgufFile, GgufReader, Value};
+use gguf::{Array, GgufHeader, GgufReader, Value};
 use gguf_tokenizer::{Pattern, Tokenizer};
 
-fn strings(header: &GgufFile, key: &str) -> Vec<String> {
+fn strings(header: &GgufHeader, key: &str) -> Vec<String> {
     match header.metadata().get(key) {
         Some(Value::Array(Array::String(items))) => items.clone(),
         _ => Vec::new(),
@@ -22,10 +22,15 @@ fn main() {
     let mut args = env::args().skip(1);
     let (path, text) = match (args.next(), args.next()) {
         (Some(path), Some(text)) => (path, text),
-        _ => { eprintln!("usage: tokenize <model.gguf> <text>"); std::process::exit(2); }
+        _ => {
+            eprintln!("usage: tokenize <model.gguf> <text>");
+            std::process::exit(2);
+        }
     };
-    let reader = GgufReader::open(&path)
-        .unwrap_or_else(|e| { eprintln!("{path}: {e}"); std::process::exit(1) });
+    let reader = GgufReader::open(&path).unwrap_or_else(|e| {
+        eprintln!("{path}: {e}");
+        std::process::exit(1)
+    });
     let header = reader.header();
 
     let named = match header.metadata().get("tokenizer.ggml.pre") {
@@ -46,17 +51,25 @@ fn main() {
     // Control and user-defined tokens are matched literally, so a chat marker
     // stays one token instead of six bytes the model has never seen together.
     let specials = match header.metadata().get("tokenizer.ggml.token_type") {
-        Some(Value::Array(Array::I32(kinds))) => kinds.iter().enumerate()
+        Some(Value::Array(Array::I32(kinds))) => kinds
+            .iter()
+            .enumerate()
             .filter(|(_, kind)| **kind == 3 || **kind == 4)
-            .map(|(id, _)| id as u32).collect(),
+            .map(|(id, _)| id as u32)
+            .collect(),
         _ => Vec::new(),
     };
 
     let tokenizer = Tokenizer::new(tokens, merges, pattern, specials, None);
-    println!("vocabulary {} entries, pre-tokenizer {named:?}", tokenizer.vocab_size());
+    println!(
+        "vocabulary {} entries, pre-tokenizer {named:?}",
+        tokenizer.vocab_size()
+    );
 
-    let ids = tokenizer.encode(&text)
-        .unwrap_or_else(|e| { eprintln!("{e}"); std::process::exit(1) });
+    let ids = tokenizer.encode(&text).unwrap_or_else(|e| {
+        eprintln!("{e}");
+        std::process::exit(1)
+    });
     println!("\n{text:?}");
     println!("  ids    {ids:?}");
     let pieces: Vec<&str> = ids.iter().filter_map(|id| tokenizer.token(*id)).collect();

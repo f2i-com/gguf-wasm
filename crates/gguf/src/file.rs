@@ -16,7 +16,7 @@ use std::path::Path;
 use gguf_quants::GgmlType;
 
 use crate::error::{GgufError, Result};
-use crate::reader::GgufFile;
+use crate::reader::GgufHeader;
 use crate::tensor::TensorInfo;
 
 /// The first read, and the largest the header is allowed to be. A header's
@@ -30,7 +30,7 @@ const LARGEST: usize = 64 << 20;
 #[derive(Debug)]
 pub struct GgufReader {
     file: File,
-    header: GgufFile,
+    header: GgufHeader,
     size: u64,
 }
 
@@ -45,7 +45,7 @@ impl GgufReader {
             let mut head = alloc_bytes(want);
             file.seek(SeekFrom::Start(0))?;
             read_exactly(&mut file, &mut head)?;
-            match GgufFile::from_bytes(head) {
+            match GgufHeader::from_bytes(&head) {
                 Ok(header) => return Ok(Self { file, header, size }),
                 Err(error) => {
                     // A header that does not parse in the whole file is not a
@@ -61,13 +61,19 @@ impl GgufReader {
     }
 
     /// The parsed header: metadata, tensor names, shapes and offsets.
-    pub fn header(&self) -> &GgufFile { &self.header }
+    pub fn header(&self) -> &GgufHeader {
+        &self.header
+    }
 
     /// How large the file is, which is not how large the header is.
-    pub fn size(&self) -> u64 { self.size }
+    pub fn size(&self) -> u64 {
+        self.size
+    }
 
     fn info(&self, name: &str) -> Result<TensorInfo> {
-        self.header.tensor_by_name(name).cloned()
+        self.header
+            .tensor_by_name(name)
+            .cloned()
             .ok_or_else(|| GgufError::MissingKey(name.into()))
     }
 
@@ -78,8 +84,8 @@ impl GgufReader {
     /// expanded, and a runtime that can read blocks should never see the
     /// expansion.
     pub fn tensor_bytes(&mut self, name: &str) -> Result<Vec<u8>> {
-        let info = self.info(name)?;
-        self.range(self.header.tensor_data_start() + info.offset, info.nbytes())
+        let range = self.header.range_of(name)?;
+        self.range(range.offset, range.bytes)
     }
 
     /// A tensor decoded to float32.
@@ -104,22 +110,36 @@ impl GgufReader {
         // [width, rows] here and its width is the first dimension.
         let (width, count) = match info.shape.as_slice() {
             [width, count] => (*width, *count),
-            _ => return Err(GgufError::TooManyDims {
-                name: name.into(), n_dims: info.shape.len() as u32 }),
+            _ => {
+                return Err(GgufError::TooManyDims {
+                    name: name.into(),
+                    n_dims: info.shape.len() as u32,
+                })
+            }
         };
         let block = info.dtype.block_size() as u64;
         if width % block != 0 {
             return Err(GgufError::NotBlockAligned {
-                name: name.into(), block: block as usize, numel: width });
+                name: name.into(),
+                block: block as usize,
+                numel: width,
+            });
         }
         let row_bytes = (width / block) * info.dtype.type_size() as u64;
-        let start = self.header.tensor_data_start() + info.offset;
+        let start = self.header.range_of(name)?.offset;
         let mut out = Vec::with_capacity(rows.len() * width as usize);
         for &row in rows {
             if row >= count {
-                return Err(GgufError::Truncated { offset: row, needed: count });
+                return Err(GgufError::Truncated {
+                    offset: row,
+                    needed: count,
+                });
             }
-            let bytes = self.range(start + row * row_bytes, row_bytes)?;
+            let at = row
+                .checked_mul(row_bytes)
+                .and_then(|o| start.checked_add(o))
+                .ok_or(GgufError::Overflow("row offset"))?;
+            let bytes = self.range(at, row_bytes)?;
             let mut decoded = vec![0.0f32; width as usize];
             gguf_quants::dequantize(info.dtype, &bytes, &mut decoded)
                 .map_err(|e| GgufError::MissingKey(format!("{name}: {e}")))?;
@@ -129,20 +149,34 @@ impl GgufReader {
     }
 
     /// One tensor's dtype, for a caller deciding whether to decode it.
-    pub fn dtype(&self, name: &str) -> Result<GgmlType> { Ok(self.info(name)?.dtype) }
+    pub fn dtype(&self, name: &str) -> Result<GgmlType> {
+        Ok(self.info(name)?.dtype)
+    }
 
     fn range(&mut self, offset: u64, length: u64) -> Result<Vec<u8>> {
-        if offset + length > self.size {
-            return Err(GgufError::Truncated { offset, needed: length });
+        // Checked, and bounded by the file, before anything is reserved: both
+        // numbers reach here from a header, and a header comes from the file.
+        match offset.checked_add(length) {
+            Some(end) if end <= self.size => {}
+            _ => {
+                return Err(GgufError::Truncated {
+                    offset,
+                    needed: length,
+                })
+            }
         }
-        let mut bytes = alloc_bytes(length as usize);
+        let mut bytes = alloc_bytes(
+            usize::try_from(length).map_err(|_| GgufError::TooLargeForMachine(length))?,
+        );
         self.file.seek(SeekFrom::Start(offset))?;
         read_exactly(&mut self.file, &mut bytes)?;
         Ok(bytes)
     }
 }
 
-fn alloc_bytes(len: usize) -> Vec<u8> { vec![0u8; len] }
+fn alloc_bytes(len: usize) -> Vec<u8> {
+    vec![0u8; len]
+}
 
 fn read_exactly(file: &mut File, into: &mut [u8]) -> Result<()> {
     file.read_exact(into).map_err(GgufError::from)
