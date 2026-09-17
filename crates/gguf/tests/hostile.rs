@@ -40,6 +40,10 @@ fn a_string_longer_than_the_file_is_refused_not_reserved() {
     let mut bytes = head(0, 1);
     // A key that claims to be sixteen exabytes.
     bytes.extend_from_slice(&u64::MAX.to_le_bytes());
+    // Enough bytes after it that one metadata entry is at least plausible --
+    // without this the count guard refuses the file first and the string
+    // length is never read, which is not what this test is about.
+    bytes.extend_from_slice(&[0u8; 16]);
     let error = GgufHeader::from_bytes(&bytes).unwrap_err();
     assert!(
         matches!(
@@ -47,6 +51,33 @@ fn a_string_longer_than_the_file_is_refused_not_reserved() {
             GgufError::TooLarge { .. } | GgufError::TooLargeForMachine(_)
         ),
         "got {error:?}"
+    );
+}
+
+#[test]
+fn a_short_read_says_so_and_a_broken_file_does_not() {
+    // The distinction the header-doubling loop depends on. A file that is
+    // merely cut short should ask for more; one that is not a GGUF file at
+    // all, or whose counts are past the limits, should not -- otherwise
+    // opening a wrong file costs the entire 64 MiB of doubling first.
+    let mut truncated = head(0, 1);
+    truncated.extend_from_slice(&8u64.to_le_bytes()); // a key of eight bytes
+    truncated.extend_from_slice(b"abc"); // ...but only three of them
+    let error = GgufHeader::from_bytes(&truncated).unwrap_err();
+    assert!(error.needs_more_bytes(), "a cut-off file: {error:?}");
+
+    // Not a GGUF file at all: no amount of reading changes that.
+    let wrong = [0xdeu8, 0xad, 0xbe, 0xef, 3, 0, 0, 0];
+    let error = GgufHeader::from_bytes(&wrong).unwrap_err();
+    assert!(!error.needs_more_bytes(), "bad magic: {error:?}");
+
+    // A count past ParseLimits is final, however much of the file arrives.
+    let mut huge = head(0, u64::MAX);
+    huge.extend_from_slice(&[0u8; 64]);
+    let error = GgufHeader::from_bytes(&huge).unwrap_err();
+    assert!(
+        !error.needs_more_bytes(),
+        "a count past the limits: {error:?}"
     );
 }
 

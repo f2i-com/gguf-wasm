@@ -242,6 +242,26 @@ fn at_most(what: &'static str, value: u64, limit: u64) -> Result<u64> {
     }
 }
 
+/// Whether `count` items of `per` bytes could possibly fit in what is left.
+///
+/// This is deliberately `Truncated` and not `TooLarge`, and the difference is
+/// the whole reason a caller can tell "read more of the file" from "give up".
+/// A header read starts at a megabyte and doubles, so the first attempt at a
+/// checkpoint with a 151,936-entry vocabulary *will* run out of bytes -- that
+/// is not a malformed file, it is a short read. A count past `ParseLimits` is
+/// the other thing entirely: no amount of further reading makes it acceptable.
+#[inline]
+fn fits_in_remaining(remaining: usize, at: usize, count: u64, per: usize) -> Result<()> {
+    let possible = (remaining / per.max(1)) as u64;
+    if count > possible {
+        return Err(GgufError::Truncated {
+            offset: at as u64,
+            needed: count.saturating_mul(per.max(1) as u64),
+        });
+    }
+    Ok(())
+}
+
 struct Cursor<'a> {
     bytes: &'a [u8],
     pos: usize,
@@ -343,12 +363,11 @@ impl<'a> Cursor<'a> {
     /// past this is reserving for bytes that are not there, which is how a
     /// four-byte length field turns into a four-gigabyte allocation.
     fn capacity_for(&self, count: u64, size: usize) -> Result<usize> {
-        let possible = (self.remaining() / size.max(1)) as u64;
-        at_most(
-            "array length",
-            count,
-            possible.min(self.limits.max_array_len),
-        )?;
+        // Two different refusals, kept apart. Past the configured limit is
+        // final; past what these bytes could hold only means these bytes are
+        // not all of them yet.
+        at_most("array length", count, self.limits.max_array_len)?;
+        fits_in_remaining(self.remaining(), self.pos, count, size)?;
         as_usize(count)
     }
 
@@ -426,11 +445,7 @@ fn parse(bytes: &[u8], limits: ParseLimits) -> Result<Inner> {
 
     // Metadata. A key is at least its own length prefix plus a type tag, so
     // twelve bytes bounds how many could possibly be here.
-    at_most(
-        "metadata entry count",
-        kv_count,
-        (c.remaining() / 12) as u64,
-    )?;
+    fits_in_remaining(c.remaining(), c.pos, kv_count, 12)?;
     let mut metadata = BTreeMap::new();
     for _ in 0..kv_count {
         let key = c.read_string()?;
@@ -456,7 +471,7 @@ fn parse(bytes: &[u8], limits: ParseLimits) -> Result<Inner> {
 
     // Tensor table. The smallest possible entry is a length prefix, an empty
     // name, a dimension count, a dtype and an offset: twenty bytes.
-    at_most("tensor count", tensor_count, (c.remaining() / 20) as u64)?;
+    fits_in_remaining(c.remaining(), c.pos, tensor_count, 20)?;
     let mut tensors = Vec::with_capacity(as_usize(tensor_count)?);
     let mut tensors_by_name = BTreeMap::new();
     for index in 0..tensor_count {

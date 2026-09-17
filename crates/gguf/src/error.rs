@@ -69,6 +69,23 @@ pub enum GgufError {
     TooLargeForMachine(u64),
 }
 
+impl GgufError {
+    /// Whether reading more of the file could change this answer.
+    ///
+    /// A header's size depends on how large the embedded tokenizer vocabulary
+    /// is, which is not known before reading it, so a header read starts small
+    /// and doubles. Without this, that loop cannot tell a short read from a
+    /// file that will never be a header, and a wrong magic number costs the
+    /// whole 64 MiB of doubling before it is refused.
+    ///
+    /// Only truncation says "read more". A count past `ParseLimits`, a bad
+    /// magic, an unknown version or a duplicate name are all final: more bytes
+    /// will not make them acceptable.
+    pub fn needs_more_bytes(&self) -> bool {
+        matches!(self, Self::Truncated { .. })
+    }
+}
+
 impl From<UnknownDtype> for GgufError {
     fn from(e: UnknownDtype) -> Self {
         Self::UnknownDtype(e)

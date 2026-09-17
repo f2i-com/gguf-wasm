@@ -39,8 +39,12 @@ impl GgufReader {
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let mut file = File::open(path)?;
         let size = file.metadata()?.len();
-        let mut want = FIRST.min(size as usize).max(1);
-        let mut last = None;
+        // Saturating rather than checked, and that is not a truncation bug:
+        // `LARGEST` caps this at 64 MiB anyway, so a file too large to measure
+        // in a `usize` just means "read the first chunk". Every comparison
+        // against the real length stays in `u64` below.
+        let whole = usize::try_from(size).unwrap_or(usize::MAX);
+        let mut want = FIRST.min(whole).max(1);
         loop {
             let mut head = alloc_bytes(want);
             file.seek(SeekFrom::Start(0))?;
@@ -48,13 +52,13 @@ impl GgufReader {
             match GgufHeader::from_bytes(&head) {
                 Ok(header) => return Ok(Self { file, header, size }),
                 Err(error) => {
-                    // A header that does not parse in the whole file is not a
-                    // header; one that does not parse yet just needs more.
-                    if want as u64 >= size || want >= LARGEST {
-                        return Err(last.unwrap_or(error));
+                    // Only a short read is worth another go. Anything else --
+                    // a bad magic, a count past the limits -- is what this
+                    // file says, and reading more of it will not say otherwise.
+                    if !error.needs_more_bytes() || want as u64 >= size || want >= LARGEST {
+                        return Err(error);
                     }
-                    last = Some(error);
-                    want = (want * 4).min(LARGEST).min(size as usize);
+                    want = (want * 4).min(LARGEST).min(whole);
                 }
             }
         }
@@ -91,8 +95,13 @@ impl GgufReader {
     /// A tensor decoded to float32.
     pub fn tensor_f32(&mut self, name: &str) -> Result<Vec<f32>> {
         let info = self.info(name)?;
+        // The bytes come first on purpose: `range` has already bounded them by
+        // the file's own length, so by the time this reserves for the decoded
+        // form the count it is reserving for is one the file could back.
         let bytes = self.tensor_bytes(name)?;
-        let mut out = vec![0.0f32; info.numel() as usize];
+        let numel = info.numel();
+        let mut out =
+            vec![0.0f32; usize::try_from(numel).map_err(|_| GgufError::TooLargeForMachine(numel))?];
         gguf_quants::dequantize(info.dtype, &bytes, &mut out)
             .map_err(|e| GgufError::MissingKey(format!("{name}: {e}")))?;
         Ok(out)
@@ -127,7 +136,16 @@ impl GgufReader {
         }
         let row_bytes = (width / block) * info.dtype.type_size() as u64;
         let start = self.header.range_of(name)?.offset;
-        let mut out = Vec::with_capacity(rows.len() * width as usize);
+        // Both of these are numbers out of the file, so neither is cast: a
+        // width past this machine's `usize` is a refusal, and a row count
+        // times that width is checked rather than wrapped.
+        let width_usize =
+            usize::try_from(width).map_err(|_| GgufError::TooLargeForMachine(width))?;
+        let capacity = rows
+            .len()
+            .checked_mul(width_usize)
+            .ok_or(GgufError::Overflow("row output size"))?;
+        let mut out = Vec::with_capacity(capacity);
         for &row in rows {
             if row >= count {
                 return Err(GgufError::Truncated {
@@ -140,7 +158,7 @@ impl GgufReader {
                 .and_then(|o| start.checked_add(o))
                 .ok_or(GgufError::Overflow("row offset"))?;
             let bytes = self.range(at, row_bytes)?;
-            let mut decoded = vec![0.0f32; width as usize];
+            let mut decoded = vec![0.0f32; width_usize];
             gguf_quants::dequantize(info.dtype, &bytes, &mut decoded)
                 .map_err(|e| GgufError::MissingKey(format!("{name}: {e}")))?;
             out.extend_from_slice(&decoded);
