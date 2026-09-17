@@ -1,0 +1,32 @@
+# GGUF, from Rust and from a browser.
+#
+# Four crates and one rule about the boundary: everything here understands the
+# *file format* and nothing here decides how a model is *executed*. The reader
+# hands over metadata, tensor shapes, byte ranges and -- when asked -- decoded
+# values; what a runtime does with those is its own business.
+#
+# That is why none of this depends on a runtime, and why the wasm surface stays
+# small enough to read in one sitting.
+[workspace]
+resolver = "2"
+members = ["crates/gguf", "crates/gguf-quants", "crates/gguf-tokenizer", "crates/gguf-wasm", "examples"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/f2i-com/gguf-wasm"
+authors = ["F2i"]
+keywords = ["gguf", "quantization", "llm", "wasm", "tokenizer"]
+categories = ["parser-implementations", "wasm", "science"]
+
+[workspace.dependencies]
+gguf = { path = "crates/gguf", version = "0.1.0" }
+gguf-quants = { path = "crates/gguf-quants", version = "0.1.0" }
+gguf-tokenizer = { path = "crates/gguf-tokenizer", version = "0.1.0" }
+half = { version = "2.4", default-features = false }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

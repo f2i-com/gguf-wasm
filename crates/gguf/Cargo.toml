@@ -1,0 +1,21 @@
+[package]
+name = "gguf"
+description = "GGUF container reading: metadata, tensor shapes and the byte range of every tensor. Works without std."
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+gguf-quants.workspace = true
+
+[features]
+default = []
+# Opening a file, and reading tensors out of it by range. Without this the
+# crate parses a header it is handed and never touches a filesystem, which is
+# what a browser needs.
+std = ["gguf-quants/std"]

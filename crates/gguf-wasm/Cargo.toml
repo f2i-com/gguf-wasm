@@ -1,0 +1,23 @@
+[package]
+name = "gguf-wasm"
+description = "GGUF reading, block dequantization and tokenization in a browser, through wasm-bindgen."
+readme = "../../README.md"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+gguf.workspace = true
+gguf-quants.workspace = true
+gguf-tokenizer.workspace = true
+# Pinned exactly: the generated bindings must match the wasm-bindgen CLI that
+# post-processes them, so the version here and the CLI in the release workflow
+# move together or not at all.
+wasm-bindgen = "=0.2.126"

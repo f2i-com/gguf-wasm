@@ -1,0 +1,18 @@
+[package]
+name = "gguf-quants"
+description = "ggml block-quantization formats (Q4_K, Q6_K, Q8_0 and the rest), decoded exactly. Works without std."
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+half.workspace = true
+
+[features]
+default = []
+std = []

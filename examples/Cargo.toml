@@ -1,0 +1,16 @@
+# Runnable examples. Not published: they exist to be read and run.
+#
+#   cargo run -p gguf-examples --bin inspect  -- model.gguf
+#   cargo run -p gguf-examples --bin tokenize -- model.gguf "Hello world"
+#   cargo run -p gguf-examples --bin rows     -- model.gguf token_embd.weight 0 1 2
+[package]
+name = "gguf-examples"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+gguf = { workspace = true, features = ["std"] }
+gguf-quants.workspace = true
+gguf-tokenizer.workspace = true

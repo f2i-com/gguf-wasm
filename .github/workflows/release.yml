@@ -1,0 +1,79 @@
+name: Release
+
+# A tag is the only automatic trigger. Pushing a branch runs nothing: the
+# artifact a consumer takes is the one attached to a tag, built from that tag's
+# Cargo.lock, so there is no question of which build a given version is.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: An existing tag to build and attach to (for example, v0.1.0)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and attach the WebAssembly
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Install the toolchain
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup target add wasm32-unknown-unknown
+          rustc --version
+
+      # The CLI and the crate's dependency must be the same version or the
+      # generated glue will not match the module. Read the pin rather than
+      # repeat it, so there is one place to change it.
+      - name: Install wasm-bindgen-cli, at the version the crate pins
+        run: |
+          want=$(grep -o '"=0\.2\.[0-9]*"' crates/gguf-wasm/Cargo.toml | tr -d '"=')
+          echo "pinned: $want"
+          cargo install wasm-bindgen-cli --version "$want" --locked
+
+      - name: Test
+        run: |
+          cargo test --release --locked
+          cargo test --release --locked -p gguf --features std
+
+      - name: Check it still builds without std
+        run: cargo build --release --locked --target wasm32-unknown-unknown
+
+      - name: Build the module
+        run: sh scripts/build-wasm.sh
+
+      - name: Package
+        id: package
+        run: |
+          version="${{ inputs.tag || github.ref_name }}"
+          mkdir -p dist
+          cp README.md LICENSE-MIT LICENSE-APACHE pkg/
+          cp README.md LICENSE-MIT LICENSE-APACHE pkg-node/
+          cp js/index.mjs pkg/index.mjs
+          tar -czf "dist/gguf-wasm-web-$version.tar.gz" -C pkg .
+          tar -czf "dist/gguf-wasm-node-$version.tar.gz" -C pkg-node .
+          (cd dist && sha256sum *.tar.gz > SHA256SUMS)
+          cat dist/SHA256SUMS
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${{ inputs.tag || github.ref_name }}"
+          gh release view "$version" >/dev/null 2>&1 \
+            || gh release create "$version" --title "$version" --generate-notes
+          gh release upload "$version" dist/*.tar.gz dist/SHA256SUMS --clobber

@@ -1,0 +1,6 @@
+* text=auto eol=lf
+
+# Compiled WebAssembly and anything a release attaches: a line-ending
+# conversion silently corrupts a module.
+*.wasm binary
+*.br binary
