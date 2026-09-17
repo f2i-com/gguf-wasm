@@ -3,6 +3,13 @@ name: CI
 # Every push and every pull request. This is a library other projects pin, so
 # the useful question is not "does it build here" but "does it still build,
 # still pass, still package, and still produce a module that loads".
+#
+# Actions are pinned by commit, not by tag. The rest of this project pins the
+# compiler, the dependency graph and wasm-bindgen exactly, and a release is
+# written once so a digest recorded against a tag stays true -- none of which
+# means much if the thing that checks out the code and builds it is a moving
+# tag someone else controls. The trailing comment is the human-readable
+# version; the SHA is what runs.
 on:
   push:
     branches: ["**"]
@@ -27,14 +34,14 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # rust-toolchain.toml pins the channel, so this installs exactly what a
       # release is built with rather than whatever stable means today.
       - name: Install the pinned toolchain
         run: rustup show && rustc --version
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: Format
         run: cargo fmt --all --check
@@ -63,9 +70,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: rustup show
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: Install wasm-bindgen-cli, at the version the crate pins
         run: |
@@ -86,8 +93,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
       - name: Test the source adapters
