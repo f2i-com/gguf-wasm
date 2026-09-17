@@ -21,9 +21,11 @@ keywords = ["gguf", "quantization", "llm", "wasm", "tokenizer"]
 categories = ["parser-implementations", "wasm", "science"]
 
 [workspace.dependencies]
-gguf = { path = "crates/gguf", version = "0.1.0" }
-gguf-quants = { path = "crates/gguf-quants", version = "0.1.0" }
-gguf-tokenizer = { path = "crates/gguf-tokenizer", version = "0.1.0" }
+# Aliased: the package carries the `f2i-` namespace, the dependency name (and so
+# the `use` path) does not.
+gguf = { package = "f2i-gguf", path = "crates/gguf", version = "0.1.0" }
+gguf-quants = { package = "f2i-gguf-quants", path = "crates/gguf-quants", version = "0.1.0" }
+gguf-tokenizer = { package = "f2i-gguf-tokenizer", path = "crates/gguf-tokenizer", version = "0.1.0" }
 half = { version = "2.4", default-features = false }
 
 [profile.release]

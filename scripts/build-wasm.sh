@@ -25,7 +25,7 @@ if [ -z "$have" ]; then
 fi
 [ "$want" = "$have" ] || { echo "wasm-bindgen CLI is $have, the crate pins $want" >&2; exit 1; }
 
-cargo build --release --target wasm32-unknown-unknown -p gguf-wasm
+cargo build --release --locked --target wasm32-unknown-unknown -p f2i-gguf-wasm
 
 for target in web nodejs; do
   case "$target" in

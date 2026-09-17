@@ -1,5 +1,8 @@
 [package]
-name = "gguf"
+# Published as `f2i-gguf`; the library is `gguf`, so a consumer aliases the
+# package and `use gguf::...` reads the same either way. The unprefixed name
+# belongs to an unrelated crate on crates.io.
+name = "f2i-gguf"
 description = "GGUF container reading: metadata, tensor shapes and the byte range of every tensor. Works without std."
 readme = "README.md"
 version.workspace = true
@@ -9,6 +12,10 @@ repository.workspace = true
 authors.workspace = true
 keywords.workspace = true
 categories.workspace = true
+
+[lib]
+name = "gguf"
+path = "src/lib.rs"
 
 [dependencies]
 gguf-quants.workspace = true

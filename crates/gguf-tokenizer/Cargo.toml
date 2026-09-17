@@ -1,5 +1,5 @@
 [package]
-name = "gguf-tokenizer"
+name = "f2i-gguf-tokenizer"
 description = "Byte-level BPE over a GGUF file's own vocabulary, with the pre-tokenizer that vocabulary was trained with."
 readme = "README.md"
 version.workspace = true
@@ -9,6 +9,10 @@ repository.workspace = true
 authors.workspace = true
 keywords.workspace = true
 categories.workspace = true
+
+[lib]
+name = "gguf_tokenizer"
+path = "src/lib.rs"
 
 [dependencies]
 

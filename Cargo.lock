@@ -21,40 +21,40 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
-name = "gguf"
+name = "f2i-gguf"
 version = "0.1.0"
 dependencies = [
- "gguf-quants",
+ "f2i-gguf-quants",
 ]
 
 [[package]]
-name = "gguf-examples"
-version = "0.1.0"
-dependencies = [
- "gguf",
- "gguf-quants",
- "gguf-tokenizer",
-]
-
-[[package]]
-name = "gguf-quants"
+name = "f2i-gguf-quants"
 version = "0.1.0"
 dependencies = [
  "half",
 ]
 
 [[package]]
-name = "gguf-tokenizer"
+name = "f2i-gguf-tokenizer"
 version = "0.1.0"
 
 [[package]]
-name = "gguf-wasm"
+name = "f2i-gguf-wasm"
 version = "0.1.0"
 dependencies = [
- "gguf",
- "gguf-quants",
- "gguf-tokenizer",
+ "f2i-gguf",
+ "f2i-gguf-quants",
+ "f2i-gguf-tokenizer",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "gguf-examples"
+version = "0.1.0"
+dependencies = [
+ "f2i-gguf",
+ "f2i-gguf-quants",
+ "f2i-gguf-tokenizer",
 ]
 
 [[package]]

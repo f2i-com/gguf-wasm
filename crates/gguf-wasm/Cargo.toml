@@ -1,7 +1,7 @@
 [package]
-name = "gguf-wasm"
+name = "f2i-gguf-wasm"
 description = "GGUF reading, block dequantization and tokenization in a browser, through wasm-bindgen."
-readme = "../../README.md"
+readme = "README.md"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,6 +11,10 @@ keywords.workspace = true
 categories.workspace = true
 
 [lib]
+# The library name is what wasm-bindgen writes out, so the module stays
+# `gguf_wasm.js` and `gguf_wasm_bg.wasm` regardless of the package name.
+name = "gguf_wasm"
+path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]

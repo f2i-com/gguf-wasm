@@ -1,5 +1,5 @@
 [package]
-name = "gguf-quants"
+name = "f2i-gguf-quants"
 description = "ggml block-quantization formats (Q4_K, Q6_K, Q8_0 and the rest), decoded exactly. Works without std."
 readme = "README.md"
 version.workspace = true
@@ -9,6 +9,10 @@ repository.workspace = true
 authors.workspace = true
 keywords.workspace = true
 categories.workspace = true
+
+[lib]
+name = "gguf_quants"
+path = "src/lib.rs"
 
 [dependencies]
 half.workspace = true
