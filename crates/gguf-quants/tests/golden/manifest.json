@@ -1,67 +1,114 @@
 {
   "generator": "scripts/golden-vectors.py",
-  "reference": "gguf-py (the llama.cpp project's Python GGUF library)",
+  "reference": "gguf-py 0.19.0",
+  "reference_project": "https://github.com/ggml-org/llama.cpp/tree/master/gguf-py",
+  "provenance": "Fully synthetic. No model weights are included here, so nothing in this directory carries a third-party model licence.",
   "vectors": {
     "F32": {
-      "values": 2048,
-      "bytes": 8192,
-      "from": "synthesised by gguf-py"
+      "values": 4096,
+      "bytes": 16384,
+      "blocks_sha256": "4aed1edefa49dfab8924bf6dd5f5bcb553891a0652bfcda1e55a4132a77022dc",
+      "values_sha256": "4aed1edefa49dfab8924bf6dd5f5bcb553891a0652bfcda1e55a4132a77022dc",
+      "from": "synthesised: pseudo-random blocks, finite f16 scales"
     },
     "F16": {
-      "values": 2048,
-      "bytes": 4096,
-      "from": "synthesised by gguf-py"
+      "values": 4096,
+      "bytes": 8192,
+      "blocks_sha256": "9734c9a153f0f56234f9e32224b4d023a866ececff366cd7ada9cf8a3d959780",
+      "values_sha256": "70a986d7a9b883f8b1b49094ebbdb972b0712e74e7a54c5f7e69cdd9883d1b9f",
+      "from": "synthesised: pseudo-random blocks, finite f16 scales"
     },
     "BF16": {
-      "values": 2048,
-      "bytes": 4096,
-      "from": "synthesised by gguf-py"
+      "values": 4096,
+      "bytes": 8192,
+      "blocks_sha256": "2b735f78dbbb7b6577514c649c86dd9a27bcef07dac8bb8f2d098180e8a9b479",
+      "values_sha256": "9c5a95e0c41568492ddc2d20800b11626078efce8e9b1bbc14ced7dd20fb8128",
+      "from": "synthesised: pseudo-random blocks, finite f16 scales"
     },
     "Q4_0": {
-      "values": 2048,
-      "bytes": 1152,
-      "from": "synthesised by gguf-py"
+      "values": 512,
+      "bytes": 288,
+      "blocks_sha256": "fcde9a6294d9ad3fa0207f0f76dec6b4b14f36b8d1124fdbafe2ad2f78352679",
+      "values_sha256": "b420aee22fc392d366467407408c230235201e4937293065d097c41bf65c03ef",
+      "from": "synthesised: pseudo-random blocks, finite f16 scales"
     },
     "Q4_1": {
-      "values": 2048,
-      "bytes": 1280,
-      "from": "synthesised by gguf-py"
+      "values": 512,
+      "bytes": 320,
+      "blocks_sha256": "d9510606d77769850587e8dd5279f687bba910e154874c9790466886497b0756",
+      "values_sha256": "1436d068443c78941812d4649d5d1fc0710e416d2913182f1a65757c465c95a8",
+      "from": "synthesised: pseudo-random blocks, finite f16 scales"
     },
     "Q5_0": {
-      "values": 2048,
-      "bytes": 1408,
-      "from": "synthesised by gguf-py"
+      "values": 512,
+      "bytes": 352,
+      "blocks_sha256": "cfb76d7b91853c6dfd3676106a9f0298c5eda6fc2108f2fff95c08d658f964b3",
+      "values_sha256": "4dc2c0b8d53c3e7c8d745adc10e6e520889211e2cff4f01f57a57a0c8b83a0e0",
+      "from": "synthesised: pseudo-random blocks, finite f16 scales"
     },
     "Q5_1": {
-      "values": 2048,
-      "bytes": 1536,
-      "from": "synthesised by gguf-py"
+      "values": 512,
+      "bytes": 384,
+      "blocks_sha256": "a5fe8753d852b57a866ec68367267ca90ab4bb75f4525d01b617f6a8d02c8c63",
+      "values_sha256": "e95507568e645194768fe5274f9e15ab8707fd170aad64c946b5922fde2d4794",
+      "from": "synthesised: pseudo-random blocks, finite f16 scales"
     },
     "Q8_0": {
-      "values": 2048,
-      "bytes": 2176,
-      "from": "synthesised by gguf-py"
+      "values": 512,
+      "bytes": 544,
+      "blocks_sha256": "0d2d83f6e0c985a4ad1c86f41f40f223e1d5dd641c39b1598667329be5fa7215",
+      "values_sha256": "e998bada9d40e026d4b6c563d24e74fc082c4bb3fdb71e521b7ed2ed34be6f48",
+      "from": "synthesised: pseudo-random blocks, finite f16 scales"
+    },
+    "Q2_K": {
+      "values": 4096,
+      "bytes": 1344,
+      "blocks_sha256": "32d2cb6ec5a96e97a2cfc88ea67b5e4f912f078755de5c2899456c0b05c7dcbf",
+      "values_sha256": "655f1585ffbdc33114bbbe6d772cd2c8a3de251289cf33e1f4abc3965726191b",
+      "from": "synthesised: pseudo-random blocks, finite f16 scales"
+    },
+    "Q3_K": {
+      "values": 4096,
+      "bytes": 1760,
+      "blocks_sha256": "53d3445a0df4893d41055331a2aa2fccfa47fdc5518077e5ccc7490a60625dda",
+      "values_sha256": "82624ee3063975f976a638110047e5da2c08aa5aefe7ffcc06db4557d68565b2",
+      "from": "synthesised: pseudo-random blocks, finite f16 scales"
     },
     "Q4_K": {
-      "values": 2048,
-      "bytes": 1152,
-      "from": "qwen3-0.6b-q4_k_m.gguf blk.0.attn_k.weight (sha256 ac2d97712095a558)"
+      "values": 4096,
+      "bytes": 2304,
+      "blocks_sha256": "46d1984809f9103275b12c343e3b49ea62716fc2683d3e8ba642d9c6388ac276",
+      "values_sha256": "1459424f061cfca4de4a34e440a7ffa02c722b75082d5c1e47a2de8ac6e8f1cd",
+      "from": "synthesised: pseudo-random blocks, finite f16 scales"
     },
     "Q5_K": {
-      "values": 2048,
-      "bytes": 1408,
-      "from": "gemma-4-e2b-q4_k_m.gguf per_layer_token_embd.weight (sha256 9378bc471710229e)"
+      "values": 4096,
+      "bytes": 2816,
+      "blocks_sha256": "05a5b707243896ddcdac903c472f364ce548760cfd396f850e11f11c6da51321",
+      "values_sha256": "32be1a0bfd0f912424dd508c6b5980a5aeb46531490296db755f0b1d833f1ab7",
+      "from": "synthesised: pseudo-random blocks, finite f16 scales"
     },
     "Q6_K": {
-      "values": 2048,
-      "bytes": 1680,
-      "from": "qwen3-0.6b-q4_k_m.gguf token_embd.weight (sha256 ac2d97712095a558)"
+      "values": 4096,
+      "bytes": 3360,
+      "blocks_sha256": "a0a760fdb2c447f4d5e0d9048aea79064659537935683bed4dffffa2196a33ca",
+      "values_sha256": "e182c87e7a9bfbe22433ea826cc19c6a74df5bcac6bd0b63b2d282c9401e6c45",
+      "from": "synthesised: pseudo-random blocks, finite f16 scales"
+    },
+    "IQ4_NL": {
+      "values": 512,
+      "bytes": 288,
+      "blocks_sha256": "348b82a9a03972b9323bf6ef173423727372b05ad321f2291260560d9bd03a37",
+      "values_sha256": "14a727fcfd512adccefc77a20d9190e979491346d0cb204a5530400a0f5117f3",
+      "from": "synthesised: pseudo-random blocks, finite f16 scales"
+    },
+    "IQ4_XS": {
+      "values": 4096,
+      "bytes": 2176,
+      "blocks_sha256": "52cfa14168ca658ec5dbcf936ca390ee4f5d482c4088cdbdb37abd3a63958012",
+      "values_sha256": "8ae4d06964e65d00f286c9c017cbebbc1873f81a649d15cbd713233ab8862467",
+      "from": "synthesised: pseudo-random blocks, finite f16 scales"
     }
   },
-  "missing": [
-    "Q2_K",
-    "Q3_K",
-    "IQ4_NL",
-    "IQ4_XS"
-  ]
+  "missing": []
 }

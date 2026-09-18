@@ -100,28 +100,31 @@ fn every_decoder_agrees_with_gguf_py() {
     }
 }
 
-/// The formats no checkpoint here uses, stated rather than silently absent.
+/// Every format this crate decodes has an independent vector.
 ///
-/// A missing vector is a gap in this evidence, and a gap nobody has written
-/// down is a gap nobody remembers. These four need a checkpoint quantized that
-/// way; when one turns up, rerun the generator and this list shrinks.
+/// The blocks are synthesised rather than taken from a checkpoint, which is
+/// what makes this reachable: gguf-py decodes the K-quants without being able
+/// to produce them, but a decoder does not need a quantizer. Every bit pattern
+/// is a legal block, so pseudo-random bytes with finite f16 scales are a valid
+/// block of any format -- and better coverage than real weights, which cluster
+/// where an off-by-one in a shift does not show.
 #[test]
-fn the_formats_without_vectors_are_named() {
+fn no_format_is_left_without_a_vector() {
     let covered = manifest();
     let all = [
         "F32", "F16", "BF16", "Q4_0", "Q4_1", "Q5_0", "Q5_1", "Q8_0", "Q2_K", "Q3_K", "Q4_K",
         "Q5_K", "Q6_K", "IQ4_NL", "IQ4_XS",
     ];
     let missing: Vec<_> = all.iter().filter(|n| !covered.contains_key(**n)).collect();
-    assert_eq!(
-        missing,
-        ["Q2_K", "Q3_K", "IQ4_NL", "IQ4_XS"]
-            .iter()
-            .collect::<Vec<_>>(),
-        "the set of formats lacking an independent check has changed"
+    assert!(
+        missing.is_empty(),
+        "these decoders have nothing independent checking them: {missing:?}"
     );
-    // And every format that *is* covered must really be one this crate decodes.
     for name in covered.keys() {
+        assert!(
+            all.contains(&name.as_str()),
+            "{name} has a vector but is not a format this crate decodes"
+        );
         assert!(
             dtype_by_name(name).is_ok(),
             "{name} is not a dtype this crate has"
