@@ -176,7 +176,7 @@ test('a server offering no validator at all is refused unless allowed', async ()
   const {fetcher} = server({body, etag: null, lastModified: null});
   await assert.rejects(
     fromURL('https://example/model.gguf', {fetch: fetcher}).prepare(),
-    /neither ETag nor Last-Modified/);
+    /neither a strong ETag nor Last-Modified/);
 
   const anyway = fromURL('https://example/model.gguf', {fetch: fetcher, allowUnvalidated: true});
   await anyway.prepare();
@@ -281,4 +281,58 @@ test('a row index the caller made up is refused, not silently converted', async 
   await assert.rejects(model.rows('blk.0.weight', 3), /takes a list of row indices/);
   // And a real one still works.
   assert.equal((await model.rows('blk.0.weight', [0, 1])).length, 8);
+});
+
+test('a weak ETag is not used as an If-Range validator', async () => {
+  // If-Range needs a strong validator. A weak one promises only semantic
+  // equivalence, which is exactly the guarantee that does not hold when the
+  // thing being joined is byte ranges -- and a server must ignore it, so
+  // sending it would look like a guarantee while being none.
+  const {fetcher, seen} = server({
+    body, etag: 'W/"weak"', lastModified: 'Wed, 17 Sep 2026 00:00:00 GMT'});
+  const source = fromURL('https://example/model.gguf', {fetch: fetcher});
+  await source.prepare();
+  assert.equal(source.identity(), 'Wed, 17 Sep 2026 00:00:00 GMT',
+    'it fell back to Last-Modified rather than pinning the weak tag');
+  await source.read(0, 4);
+  assert.equal(seen.at(-1)['If-Range'], 'Wed, 17 Sep 2026 00:00:00 GMT');
+
+  // And with nothing else to fall back to, a weak ETag alone is no validator.
+  const {fetcher: weakOnly} = server({body, etag: 'W/"weak"', lastModified: null});
+  await assert.rejects(
+    fromURL('https://example/model.gguf', {fetch: weakOnly}).prepare(),
+    /neither a strong ETag nor Last-Modified/);
+});
+
+test('a Content-Range past 2^53 is not a usable Content-Range', async () => {
+  // Decimal digits from a header. Number() takes as many as it is given and
+  // returns something close to, but not equal to, what was sent -- while the
+  // entire point of reading this header is comparing it with what was asked.
+  const huge = `bytes 0-0/${Number.MAX_SAFE_INTEGER + 2}`;
+  const fetcher = async () => response(206, body.subarray(0, 1), {
+    etag: '"v1"', 'content-range': huge});
+  await assert.rejects(
+    fromURL('https://example/model.gguf', {fetch: fetcher}).prepare(),
+    /no usable Content-Range/);
+});
+
+test('what the module cannot address says so, rather than truncating', async () => {
+  // dequantize() and row_range() take u32, because they produce values inside
+  // wasm32 memory. wasm-bindgen would truncate a larger number, so a row index
+  // of 2**32 + 5 would read row 5 and return it as though it were the one
+  // asked for. bytes() has no such ceiling and is the way round it.
+  const source = fromBlob(new Blob([new Uint8Array(256)]));
+  const huge = 2 ** 32 + 5;
+
+  const wide = await openGGUF(source, {
+    module: moduleListing(oneTensor({shape: [4, huge], elements: 16})),
+  });
+  await assert.rejects(wide.rows('blk.0.weight', [huge - 1]),
+    /past the 4294967295 this module addresses/);
+
+  const many = await openGGUF(source, {
+    module: moduleListing(oneTensor({elements: 2 ** 33})),
+  });
+  await assert.rejects(many.floats('blk.0.weight'),
+    /past the 4294967295 this module can decode in one call/);
 });

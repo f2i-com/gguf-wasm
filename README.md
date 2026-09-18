@@ -106,6 +106,121 @@ JavaScript hands `2**32 + 1`, `-1` or `1.5` to that conversion without
 complaint -- each of which reads some other row and returns it as though it
 were the one asked for. An index outside the tensor's own row count is refused.
 
+### One `u32` ceiling, made explicit
+
+The parser is `u64` throughout, and a tensor's offset and length stay that wide
+because reading a range never materialises anything inside the module. Two
+entry points are narrower: `dequantize` and `row_range` take a `u32`, since what
+they produce lands in wasm32 memory, which is four gigabytes in total. A wider
+parameter would move the failure rather than remove it.
+
+What is worth refusing is the silent conversion, and `js/index.mjs` does:
+`rows()` rejects an index past `0xffffffff` and `floats()` rejects a tensor with
+more values than that, each saying so rather than truncating. `bytes()` has no
+such ceiling and is the way past it -- the range is read outside the module and
+never crosses that boundary, which is what a caller holding a tensor too large
+to decode in one go should use.
+
+None of this is about Rust memory safety, which is not in question. It is about
+a malformed or hostile file producing an error rather than a panic, a silently
+truncated length, or an allocation that takes the process down. `crates/gguf/
+tests/hostile.rs` is where that is checked, including every prefix of a
+plausible header and a couple of thousand rounds of arbitrary bytes.
+
+## Rust
+
+```toml
+[dependencies]
+gguf = { package = "f2i-gguf", version = "0.0.3", features = ["std"] }
+```
+
+```rust
+use gguf::GgufReader;
+
+let mut model = GgufReader::open("model.gguf")?;
+println!("{:?}", model.header().metadata().get("general.architecture"));
+
+// The file's own bytes: for a quantized tensor, its blocks.
+let packed = model.tensor_bytes("blk.0.attn_q.weight")?;
+
+// Or decoded, if that is what you want.
+let values = model.tensor_f32("blk.0.attn_q.weight")?;
+
+// Or one row of a vocabulary-sized table, without the rest of it.
+let embedding = model.rows_f32("token_embd.weight", &[12095])?;
+```
+
+Without the `std` feature there is no file and no filesystem. You hand
+`GgufHeader::from_bytes` a header you read yourself, and it tells you where a
+tensor is:
+
+```rust
+let header = gguf::GgufHeader::from_bytes(&first_megabyte)?;
+let range = header.range_of("blk.0.attn_q.weight")?;   // offset and length
+```
+
+A header holds no file bytes and cannot hand you a tensor body — reading that
+range is the caller's job, because only the caller knows whether the file is a
+`File`, a `Blob`, an HTTP resource or a peer.
+
+## JavaScript
+
+```js
+import init, * as gguf from './pkg/gguf_wasm.js';
+import {openGGUF, fromBlob} from './js/index.mjs';
+
+await init();
+const model = await openGGUF(fromBlob(file), {module: gguf});
+
+model.architecture;                              // 'qwen3'
+model.tensors.get('blk.0.attn_q.weight').shape;  // [2048, 1024]
+await model.bytes('blk.0.attn_q.weight');        // packed blocks
+await model.rows('token_embd.weight', [12095]);  // one row, kilobytes
+
+const tokenizer = model.tokenizer();
+tokenizer.encode('The capital of France is');    // [785, 6722, 315, 9625, 374]
+tokenizer.decode(ids);
+```
+
+`js/index.mjs` is a convenience: reading the header by doubling until it
+parses, turning a tensor name into a byte range, and fetching that range. The
+module underneath is smaller and you can use it directly.
+
+Three sources: `fromBlob(file)`, `fromFileHandle(handle, size)`, and
+`fromURL(url)`.
+
+### Reading one object, not several
+
+`fromURL` reads a model over many requests, and the failure that matters is not
+a request that fails — it is a *successful* one against a different object. A
+header parsed from version A and a weight fetched from version B are both 206,
+both the right length, and the model is quietly wrong. So identity is pinned
+when the model is opened and carried afterwards:
+
+* the open is a one-byte range request, not a HEAD. A server that honours Range
+  answers with a `Content-Range` stating the total, which is proof rather than a
+  promise — and some perfectly good servers and CDNs do not expose
+  `Accept-Ranges` or `Content-Length` to a cross-origin HEAD at all;
+* whatever validator comes back (`ETag`, else `Last-Modified`) is sent as
+  `If-Range` on every read after that, so a changed object answers 200 with the
+  whole entity and is refused;
+* every response's `Content-Range` must be the range that was asked for, out of
+  a total that has not changed, and its numbers must be exact JavaScript
+  integers -- they are decimal digits from a header, and `Number` will take more
+  of them than it can hold and return something merely close;
+* a *weak* `ETag` is passed over for `Last-Modified`. `If-Range` requires a
+  strong validator and a server must ignore a weak one, so sending `W/"..."`
+  would look like a guarantee while being none.
+
+That does not make an HTTP source trustworthy. It makes it *consistent*: given
+a validator, what is read is all from one object or it is an error.
+
+A server that offers neither `ETag` nor `Last-Modified` cannot support that,
+and `fromURL` refuses it rather than quietly falling back to the size check --
+an object replaced by a different one of the same length is exactly the failure
+the rest of this is for. `allowUnvalidated: true` reads it anyway, and
+`identity()` returns `null` so a caller can tell which it got.
+
 ## The tokenizer is not an afterthought
 
 A GGUF file carries its vocabulary, its merge table, and — importantly — the
