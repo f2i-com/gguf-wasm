@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """Regenerate the golden block vectors in crates/gguf-quants/tests/golden/.
 
-    pip install gguf numpy
+    python -m pip install -r requirements-golden.txt
     python scripts/golden-vectors.py
+
+The requirements file pins exact versions, because these vectors are evidence:
+regenerating them against a different gguf-py would leave nobody able to tell
+whether a disagreement meant the decoder had changed or the reference had.
 
 ## Why these exist
 

@@ -336,3 +336,38 @@ test('what the module cannot address says so, rather than truncating', async () 
   await assert.rejects(many.floats('blk.0.weight'),
     /past the 4294967295 this module can decode in one call/);
 });
+
+test('a source that misbehaves is refused, not believed', async () => {
+  // The built-in sources are fine. A source is a public interface though, and
+  // a bad size makes every bounds check downstream meaningless, while a short
+  // read is the quiet one: a decoder sees a truncated tensor as a valid one
+  // full of whatever followed it.
+  const module = moduleListing(oneTensor());
+  for (const size of [0, -1, 1.5, 2 ** 53 + 1, NaN, undefined]) {
+    await assert.rejects(
+      openGGUF({size: () => size, read: async () => new Uint8Array(0)}, {module}),
+      /which is not a length/, `size ${String(size)}`);
+  }
+  const short = {
+    size: () => 256,
+    async read(offset, length) { return new Uint8Array(Math.max(0, length - 1)); },
+  };
+  await assert.rejects(openGGUF(short, {module}), /returned 255 bytes for 256/);
+});
+
+test('an ETag that is not one is not used as a validator', async () => {
+  // RFC 9110 spells an entity-tag as a quoted string. Something else is a
+  // header this does not understand, and sending it as If-Range would assert
+  // something about a syntax nobody agreed to.
+  const stamp = 'Wed, 17 Sep 2026 00:00:00 GMT';
+  for (const etag of ['unquoted', 'W/"weak"', '"unterminated', '']) {
+    const {fetcher} = server({body, etag, lastModified: stamp});
+    const source = fromURL('https://example/model.gguf', {fetch: fetcher});
+    await source.prepare();
+    assert.equal(source.identity(), stamp, `${JSON.stringify(etag)} should not be pinned`);
+  }
+  const {fetcher} = server({body, etag: '"proper"', lastModified: stamp});
+  const good = fromURL('https://example/model.gguf', {fetch: fetcher});
+  await good.prepare();
+  assert.equal(good.identity(), '"proper"', 'a strong ETag is preferred over Last-Modified');
+});

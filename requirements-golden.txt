@@ -1,0 +1,15 @@
+# The environment that produced crates/gguf-quants/tests/golden/.
+#
+#   python -m pip install -r requirements-golden.txt
+#   python scripts/golden-vectors.py
+#
+# Pinned exactly, because those vectors are evidence. They are checked in as
+# what an independent implementation says the block formats decode to, and
+# `pip install gguf numpy` means something different next year -- so a
+# regenerated vector that disagreed with a committed one would leave nobody able
+# to tell whether the decoder had changed or the reference had.
+#
+# Nothing at runtime depends on this. The crates have no Python in them; this is
+# only for rebuilding the evidence and confirming it comes back the same.
+gguf==0.19.0
+numpy==2.4.3
