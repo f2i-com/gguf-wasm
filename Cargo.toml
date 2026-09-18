@@ -12,7 +12,7 @@ resolver = "2"
 members = ["crates/gguf", "crates/gguf-quants", "crates/gguf-tokenizer", "crates/gguf-wasm", "examples"]
 
 [workspace.package]
-version = "0.0.3"
+version = "0.0.4"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/f2i-com/gguf-wasm"
@@ -23,9 +23,9 @@ categories = ["parser-implementations", "wasm", "science"]
 [workspace.dependencies]
 # Aliased: the package carries the `f2i-` namespace, the dependency name (and so
 # the `use` path) does not.
-gguf = { package = "f2i-gguf", path = "crates/gguf", version = "0.0.3" }
-gguf-quants = { package = "f2i-gguf-quants", path = "crates/gguf-quants", version = "0.0.3" }
-gguf-tokenizer = { package = "f2i-gguf-tokenizer", path = "crates/gguf-tokenizer", version = "0.0.3" }
+gguf = { package = "f2i-gguf", path = "crates/gguf", version = "0.0.4" }
+gguf-quants = { package = "f2i-gguf-quants", path = "crates/gguf-quants", version = "0.0.4" }
+gguf-tokenizer = { package = "f2i-gguf-tokenizer", path = "crates/gguf-tokenizer", version = "0.0.4" }
 half = { version = "2.4", default-features = false }
 
 [profile.release]

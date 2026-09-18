@@ -4,7 +4,7 @@ GGUF container reading: metadata, tensor shapes, and the byte range of every
 tensor. Part of [gguf-wasm](https://github.com/f2i-com/gguf-wasm).
 
 ```toml
-gguf = { package = "f2i-gguf", version = "0.0.3", features = ["std"] }
+gguf = { package = "f2i-gguf", version = "0.0.4", features = ["std"] }
 ```
 
 **A header is not a file.** What this returns describes where a tensor lives;
