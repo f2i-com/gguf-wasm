@@ -4,3 +4,9 @@
 # conversion silently corrupts a module.
 *.wasm binary
 *.br binary
+
+# Golden block vectors: packed blocks and the float32 they decode to. These are
+# raw little-endian numbers, so bytes that happen to be 0x0D 0x0A are data --
+# `text=auto` would guess wrong on a file with no NUL in it and rewrite them.
+*.blocks binary
+*.f32 binary

@@ -233,6 +233,20 @@ arithmetic in double and rounding once at the end agrees most of the time and
 differs in the last bit the rest of it, which over a table with millions of
 values is not "most of the time" at all.
 
+Which is a claim, so it is checked against someone else's decoder rather than
+only against `ggml-quants.c` by eye. `crates/gguf-quants/tests/golden/` holds
+vectors produced by [gguf-py](https://github.com/ggml-org/llama.cpp/tree/master/gguf-py),
+the llama.cpp project's own GGUF library, written in numpy by other people from
+the same specification — half blocks it quantized itself, half lifted out of
+real checkpoints, since gguf-py decodes the K-quants without being able to
+produce them. The comparison is equality, not a tolerance: eleven of the
+fifteen formats, bit for bit.
+
+The other four are Q2_K, Q3_K, IQ4_NL and IQ4_XS, which need a checkpoint
+quantized that way. A test names them, so the gap stays visible instead of
+looking like coverage. `scripts/golden-vectors.py` regenerates the vectors and
+records where each came from.
+
 ## Examples
 
 ```sh
@@ -258,7 +272,9 @@ from that tag's `Cargo.lock`.
 ## Tests
 
 ```sh
-cargo test --workspace                                # the format itself
+cargo test --workspace                                # the format itself,
+                                                      # including the golden
+                                                      # vectors from gguf-py
 cargo test -p f2i-gguf --features std                 # and the file reader
 node --test js/index.test.mjs                         # the source adapters
 sh scripts/build-wasm.sh && node scripts/smoke.mjs    # the built module

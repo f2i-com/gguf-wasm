@@ -1,0 +1,67 @@
+{
+  "generator": "scripts/golden-vectors.py",
+  "reference": "gguf-py (the llama.cpp project's Python GGUF library)",
+  "vectors": {
+    "F32": {
+      "values": 2048,
+      "bytes": 8192,
+      "from": "synthesised by gguf-py"
+    },
+    "F16": {
+      "values": 2048,
+      "bytes": 4096,
+      "from": "synthesised by gguf-py"
+    },
+    "BF16": {
+      "values": 2048,
+      "bytes": 4096,
+      "from": "synthesised by gguf-py"
+    },
+    "Q4_0": {
+      "values": 2048,
+      "bytes": 1152,
+      "from": "synthesised by gguf-py"
+    },
+    "Q4_1": {
+      "values": 2048,
+      "bytes": 1280,
+      "from": "synthesised by gguf-py"
+    },
+    "Q5_0": {
+      "values": 2048,
+      "bytes": 1408,
+      "from": "synthesised by gguf-py"
+    },
+    "Q5_1": {
+      "values": 2048,
+      "bytes": 1536,
+      "from": "synthesised by gguf-py"
+    },
+    "Q8_0": {
+      "values": 2048,
+      "bytes": 2176,
+      "from": "synthesised by gguf-py"
+    },
+    "Q4_K": {
+      "values": 2048,
+      "bytes": 1152,
+      "from": "qwen3-0.6b-q4_k_m.gguf blk.0.attn_k.weight (sha256 ac2d97712095a558)"
+    },
+    "Q5_K": {
+      "values": 2048,
+      "bytes": 1408,
+      "from": "gemma-4-e2b-q4_k_m.gguf per_layer_token_embd.weight (sha256 9378bc471710229e)"
+    },
+    "Q6_K": {
+      "values": 2048,
+      "bytes": 1680,
+      "from": "qwen3-0.6b-q4_k_m.gguf token_embd.weight (sha256 ac2d97712095a558)"
+    }
+  },
+  "missing": [
+    "Q2_K",
+    "Q3_K",
+    "IQ4_NL",
+    "IQ4_XS"
+  ]
+}
