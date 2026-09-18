@@ -4,7 +4,7 @@ Byte-level BPE over a GGUF file's own vocabulary. Part of
 [gguf-wasm](https://github.com/f2i-com/gguf-wasm).
 
 ```toml
-gguf-tokenizer = { package = "f2i-gguf-tokenizer", version = "0.0.4" }
+gguf-tokenizer = { package = "f2i-gguf-tokenizer", version = "0.0.5" }
 ```
 
 The pre-tokenizer is per vocabulary and it matters: Qwen2 splits digits **one at
